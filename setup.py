@@ -258,6 +258,155 @@ def install_git_aliases_and_defaults():
         run_git_config(key, value)
 
 
+IDENTITY_FILE = Path.home() / ".config" / "my-vscode-setup" / "identity.json"
+
+
+def _identity_from_git_config():
+    name = run(["git", "config", "--global", "user.name"], check=False).stdout.strip()
+    email = run(["git", "config", "--global", "user.email"], check=False).stdout.strip()
+    return name or None, email or None
+
+
+def _identity_from_profile():
+    try:
+        data = json.loads(IDENTITY_FILE.read_text(encoding="utf-8"))
+        return data.get("name") or None, data.get("email") or None
+    except (OSError, ValueError):
+        return None, None
+
+
+def _identity_from_backup_gitconfig():
+    """Read user.name/user.email from the newest config backup snapshot's .gitconfig."""
+    if not CONFIG_BACKUP_DIR.exists():
+        return None, None
+    snapshots = sorted((p for p in CONFIG_BACKUP_DIR.iterdir() if p.is_dir()), reverse=True)
+    for snapshot in snapshots:
+        gitconfig = snapshot / ".gitconfig"
+        if not gitconfig.exists():
+            continue
+        try:
+            text = gitconfig.read_text(encoding="utf-8", errors="replace")
+        except OSError:
+            continue
+        name_match = re.search(r"^\s*name\s*=\s*(.+)$", text, re.MULTILINE)
+        email_match = re.search(r"^\s*email\s*=\s*(.+)$", text, re.MULTILINE)
+        name = name_match.group(1).strip() if name_match else None
+        email = email_match.group(1).strip() if email_match else None
+        if name or email:
+            return name, email
+    return None, None
+
+
+def _identity_from_repo_history():
+    """Recover author name/email from commit history of local workspace repos."""
+    search_roots = [WORKSPACE / category for category in CATEGORIES] + [SCRIPT_ROOT.parent]
+    for root in search_roots:
+        if not root.exists():
+            continue
+        for repo in sorted(root.iterdir()):
+            if not (repo / ".git").exists():
+                continue
+            res = run(["git", "log", "-1", "--format=%an%x09%ae"], check=False, cwd=str(repo))
+            if res.returncode != 0 or not res.stdout.strip():
+                continue
+            name, _tab, email = res.stdout.strip().partition("\t")
+            if name or email:
+                return name or None, email or None
+    return None, None
+
+
+def _identity_from_gh():
+    """Recover identity from the authenticated GitHub CLI account."""
+    if not check_tool("gh"):
+        return None, None
+    res = run(["gh", "api", "user", "--jq", "[.name // .login, .email // \"\"] | @tsv"], check=False)
+    if res.returncode != 0 or not res.stdout.strip():
+        return None, None
+    name, _tab, email = res.stdout.strip().partition("\t")
+    return name or None, email or None
+
+
+def save_identity(name, email):
+    try:
+        IDENTITY_FILE.parent.mkdir(parents=True, exist_ok=True)
+        IDENTITY_FILE.write_text(json.dumps({"name": name, "email": email}, indent=2) + "\n", encoding="utf-8")
+    except OSError:
+        pass
+
+
+def discover_identity():
+    """Best-effort identity recovery from every trace of past history on this machine.
+
+    Order: current git config -> saved profile -> config backups -> repo commit
+    history -> GitHub CLI. Name and email can each come from different sources.
+    """
+    name, email = None, None
+    sources = {}
+    for source, finder in (
+        ("git config", _identity_from_git_config),
+        ("saved profile", _identity_from_profile),
+        ("config backup", _identity_from_backup_gitconfig),
+        ("commit history", _identity_from_repo_history),
+        ("GitHub CLI", _identity_from_gh),
+    ):
+        if name and email:
+            break
+        found_name, found_email = finder()
+        if not name and found_name:
+            name, sources["name"] = found_name, source
+        if not email and found_email:
+            email, sources["email"] = found_email, source
+    return name, email, sources
+
+
+def restore_identity():
+    """Auto-restore git user.name/user.email from past history. Returns (name, email)."""
+    print_info("Restoring git identity from past history...")
+    name, email, sources = discover_identity()
+    current_name, current_email = _identity_from_git_config()
+    if name and name != current_name:
+        run_git_config("user.name", name)
+        log_action("restore-identity: user.name", "ok", f"{name} (from {sources.get('name', '?')})")
+    if email and email != current_email:
+        run_git_config("user.email", email)
+        log_action("restore-identity: user.email", "ok", f"{email} (from {sources.get('email', '?')})")
+    if name and email:
+        print_ok(f"Git identity restored: {name} <{email}>")
+        save_identity(name, email)
+    else:
+        missing = " and ".join(part for part, value in (("name", name), ("email", email)) if not value)
+        print_warn(f"Could not recover git {missing}. Set it once with: "
+                   "python3 setup.py github-setup --name 'Your Name' --email 'you@example.com'")
+        log_action("restore-identity", "partial", f"missing {missing}")
+    return name, email
+
+
+def ensure_ssh_key(email=None):
+    """Create the ed25519 SSH key automatically if it does not exist."""
+    ssh_dir = Path.home() / ".ssh"
+    key_path = ssh_dir / "id_ed25519"
+    if key_path.exists():
+        print_ok(f"SSH key already exists: {key_path}")
+        log_action("ssh-key", "ok", str(key_path))
+        return True
+    if not check_tool("ssh-keygen"):
+        print_warn("ssh-keygen not found. Skipping SSH key creation.")
+        log_action("ssh-key", "skipped", "ssh-keygen missing")
+        return False
+    ssh_dir.mkdir(mode=0o700, parents=True, exist_ok=True)
+    comment = email or "my-vscode-setup"
+    res = run(["ssh-keygen", "-t", "ed25519", "-C", comment, "-f", str(key_path), "-N", ""], check=False)
+    if res.returncode == 0:
+        print_ok(f"SSH key created: {key_path}")
+        print_info("Add the public key to GitHub: https://github.com/settings/keys")
+        print_info(f"  cat {key_path}.pub")
+        log_action("ssh-key", "ok", "created")
+        return True
+    print_warn("SSH key creation failed.")
+    log_action("ssh-key", "failed")
+    return False
+
+
 def repo_name_from_url(url):
     name = url.rstrip("/").split("/")[-1]
     if name.endswith(".git"):
@@ -859,34 +1008,22 @@ def github_setup(args):
     if args.email:
         run_git_config("user.email", args.email)
         log_action("github-setup: git user.email", "ok", args.email)
+    if args.name and args.email:
+        save_identity(args.name, args.email)
     if not args.name and not args.email:
         current_name = run(["git", "config", "--global", "user.name"], check=False).stdout.strip()
         current_email = run(["git", "config", "--global", "user.email"], check=False).stdout.strip()
         if current_name and current_email:
             print_ok(f"Git identity already set: {current_name} <{current_email}>")
+            save_identity(current_name, current_email)
         else:
-            print_warn("Git identity not fully set. Re-run with --name and --email.")
+            restore_identity()
 
+    _name, email = _identity_from_git_config()
     ssh_dir = Path.home() / ".ssh"
     key_path = ssh_dir / "id_ed25519"
-    if key_path.exists():
-        print_ok(f"SSH key already exists: {key_path}")
-        log_action("github-setup: SSH key", "ok", str(key_path))
-    elif args.ssh:
-        if not check_tool("ssh-keygen"):
-            print_warn("ssh-keygen not found. Skipping SSH key creation.")
-            log_action("github-setup: SSH key", "skipped", "ssh-keygen missing")
-        else:
-            ssh_dir.mkdir(mode=0o700, parents=True, exist_ok=True)
-            comment = args.email or "my-vscode-setup"
-            res = run(["ssh-keygen", "-t", "ed25519", "-C", comment, "-f", str(key_path), "-N", ""], check=False)
-            if res.returncode == 0:
-                print_ok(f"SSH key created: {key_path}")
-                print_info("Add the public key to GitHub: https://github.com/settings/keys")
-                log_action("github-setup: SSH key", "ok", "created")
-            else:
-                print_warn("SSH key creation failed.")
-                log_action("github-setup: SSH key", "failed")
+    if key_path.exists() or args.ssh:
+        ensure_ssh_key(args.email or email)
     else:
         print_warn("No SSH key found. Re-run with --ssh to create one.")
         log_action("github-setup: SSH key", "pending", "re-run with --ssh")
@@ -1094,6 +1231,14 @@ def auto_heal(args):
     print()
     ai_setup(args)
     print()
+
+    if check_tool("git"):
+        print_info("== Auto-heal: identity, SSH key and premium extras ==")
+        _name, email = restore_identity()
+        ensure_ssh_key(email)
+        install_git_aliases_and_defaults()
+        install_global_gitignore()
+        print()
 
     still_missing = [(tool, hint) for tool, hint in CORE_TOOLS if not check_tool(tool)]
     if still_missing:
@@ -1514,7 +1659,8 @@ def build_parser():
 
     sub.add_parser(
         "auto-heal",
-        help="Never-fail repair: auto-install missing tools (docker, node, code, gh...), extensions and packages",
+        help="Never-fail repair: auto-install missing tools, extensions, packages, "
+             "restore git identity from past history, create SSH key, aliases and secret protection",
     ).set_defaults(func=auto_heal)
 
     sub.add_parser(
