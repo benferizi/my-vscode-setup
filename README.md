@@ -9,6 +9,20 @@ It combines and replaces both legacy bundles:
 
 Both legacy folders are intentionally kept as reference.
 
+## One-command full install (after PC format)
+
+Run this single command on a fresh machine — it clones the repo and runs the full automated setup (workspace layout, git config, VS Code extensions, dev tools, config restore, summary):
+
+```bash
+curl -fsSL https://raw.githubusercontent.com/benferizi/my-vscode-setup/main/install.sh | bash
+```
+
+Or, if you already cloned the repo:
+
+```bash
+bash install.sh
+```
+
 ## Quick start
 
 Optional cleanup first (dry run):
