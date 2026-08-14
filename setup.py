@@ -1327,6 +1327,14 @@ Categories=Development;
 StartupWMClass=GitHub Copilot
 """
 
+COPILOT_LAUNCHER_SCRIPT = """#!/usr/bin/env bash
+# GitHub Copilot AppImage launcher (created by setup.py copilot-app).
+# --disable-gpu-compositing fixes the frozen/partially-rendered window that the
+# Electron app shows on some Linux GPU/driver combos (Wayland, NVIDIA, VMs).
+# Still freezing? Run: github-copilot --disable-gpu
+exec "{appimage}" --disable-gpu-compositing "$@"
+"""
+
 
 def _find_copilot_appimage(explicit):
     """Locate the Copilot AppImage: explicit path first, then common folders."""
@@ -1374,15 +1382,17 @@ def copilot_app(args):
     launcher = APPIMAGE_BIN_DIR / "github-copilot"
     if launcher.is_symlink() or launcher.exists():
         launcher.unlink()
-    launcher.symlink_to(target)
+    launcher.write_text(COPILOT_LAUNCHER_SCRIPT.format(appimage=target), encoding="utf-8")
+    launcher.chmod(0o755)
     print_ok(f"Launcher command: {launcher} (run: github-copilot)")
+    print_info("Launcher uses --disable-gpu-compositing to fix frozen/partial window rendering.")
     if str(APPIMAGE_BIN_DIR) not in os.environ.get("PATH", ""):
         print_warn(f"{APPIMAGE_BIN_DIR} is not in PATH. Add to ~/.bashrc: export PATH=\"$HOME/.local/bin:$PATH\"")
     log_action("copilot-app: launcher", "ok", str(launcher))
 
     APPIMAGE_DESKTOP_DIR.mkdir(parents=True, exist_ok=True)
     desktop_file = APPIMAGE_DESKTOP_DIR / "github-copilot.desktop"
-    desktop_file.write_text(COPILOT_DESKTOP_ENTRY.format(exec_path=target), encoding="utf-8")
+    desktop_file.write_text(COPILOT_DESKTOP_ENTRY.format(exec_path=launcher), encoding="utf-8")
     desktop_file.chmod(0o755)
     print_ok(f"Desktop entry created: {desktop_file} (app menu integration)")
     if check_tool("update-desktop-database"):
@@ -1412,6 +1422,7 @@ def copilot_app(args):
     print("  1. Launch it: github-copilot   (or from your app menu: 'GitHub Copilot')")
     print("  2. Sign in with your GitHub account to activate Copilot Pro+.")
     print("  3. In VS Code, sign in via the Accounts menu for in-editor Copilot.")
+    print("  Tip: if the window still freezes or renders partially, run: github-copilot --disable-gpu")
     print_ok("GitHub Copilot AppImage setup finished.")
     log_action("copilot-app", "ok")
 
