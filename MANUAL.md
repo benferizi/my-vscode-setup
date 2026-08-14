@@ -93,8 +93,11 @@ python setup.py restore --full
 - `python setup.py github-setup [--name NAME] [--email EMAIL] [--ssh]`  
   Premium GitHub setup: check/verify `gh` CLI and auth status, configure git identity, create an ed25519 SSH key (with `--ssh`), and show the Copilot Pro+ activation checklist.
 
-- `python setup.py dev-setup [--skip-npm] [--skip-python]`  
-  Verify core dev tools (git, Node.js, npm, Docker, VS Code) and install global npm packages (nodemon, express-generator, create-react-app, @vue/cli, typescript) plus Python packages (django, flask, requests, numpy, pandas, matplotlib).
+- `python setup.py dev-setup [--skip-npm] [--skip-python] [--no-auto-install]`  
+  Verify core dev tools (git, Node.js, npm, Docker, VS Code, gh). Missing tools are installed automatically using whatever package manager is available (apt, dnf, yum, pacman, zypper, brew, winget, choco, snap; Docker also falls back to the official get.docker.com script). Then installs global npm packages (nodemon, express-generator, create-react-app, @vue/cli, typescript) plus Python packages (django, flask, requests, numpy, pandas, matplotlib). Use `--no-auto-install` to only report missing tools.
+
+- `python setup.py auto-heal`  
+  Never-fail one-shot repair after a PC format: auto-installs every missing core tool, VS Code extensions, npm globals, Python packages and the AI stack, then reports anything that still needs manual attention.
 
 - `python setup.py config backup [--backup-dir PATH]`  
   Backup `~/.bashrc`, `~/.bash_aliases`, `~/.gitconfig`, `~/.nanorc` and `~/Projects/personal` into a timestamped snapshot (default: `~/my-vscode-setup-backup/configs`).

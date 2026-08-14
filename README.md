@@ -108,7 +108,8 @@ The toolkit uses:
 | `python setup.py secret-scan` | Basic secret scan for current repo |
 | `python setup.py extensions` | Install/verify recommended VS Code extensions |
 | `python setup.py github-setup [--name N] [--email E] [--ssh]` | Premium GitHub setup: gh CLI check + auth status, git identity, ed25519 SSH key, Copilot Pro+ checklist |
-| `python setup.py dev-setup [--skip-npm] [--skip-python]` | Install/verify dev tools (Node, npm, Docker, VS Code), global npm packages (nodemon, express-generator, create-react-app, @vue/cli, typescript) and Python packages (django, flask, requests, numpy, pandas, matplotlib) |
+| `python setup.py dev-setup [--skip-npm] [--skip-python] [--no-auto-install]` | Install/verify dev tools (git, Node, npm, Docker, VS Code, gh) — missing tools are auto-installed via apt/dnf/yum/pacman/zypper/brew/winget/choco/snap (Docker also via get.docker.com) — plus global npm packages (nodemon, express-generator, create-react-app, @vue/cli, typescript) and Python packages (django, flask, requests, numpy, pandas, matplotlib) |
+| `python setup.py auto-heal` | Never-fail one-shot repair after a PC format: auto-install every missing tool, extension and package, then report anything left |
 | `python setup.py config backup [--backup-dir <path>]` | Backup `~/.bashrc`, `~/.bash_aliases`, `~/.gitconfig`, `~/.nanorc` and `~/Projects/personal` |
 | `python setup.py config restore [--snapshot <path>]` | Restore configs and personal projects from the latest (or given) backup |
 | `python setup.py repos [owner] [--limit N] [--visibility public\|private\|internal]` | List your GitHub repositories via the `gh` CLI |

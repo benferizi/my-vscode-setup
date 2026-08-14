@@ -899,23 +899,161 @@ def github_setup(args):
     print_ok("GitHub setup finished.")
 
 
+CORE_TOOLS = (
+    ("git", "https://git-scm.com"),
+    ("node", "https://nodejs.org"),
+    ("npm", "comes with Node.js"),
+    ("docker", "https://docs.docker.com/get-docker/"),
+    ("code", "https://code.visualstudio.com"),
+    ("gh", "https://cli.github.com"),
+)
+
+# Package-manager command templates, in preference order per platform.
+# Format: (manager binary, install command prefix, needs sudo on POSIX, one-time prepare command)
+PKG_MANAGERS = (
+    ("apt-get", ["apt-get", "install", "-y"], True, ["apt-get", "update"]),
+    ("dnf", ["dnf", "install", "-y"], True, None),
+    ("yum", ["yum", "install", "-y"], True, None),
+    ("pacman", ["pacman", "-S", "--noconfirm", "--needed"], True, None),
+    ("zypper", ["zypper", "--non-interactive", "install"], True, None),
+    ("brew", ["brew", "install"], False, None),
+    ("winget", ["winget", "install", "-e", "--accept-source-agreements", "--accept-package-agreements", "--id"], False, None),
+    ("choco", ["choco", "install", "-y"], False, None),
+    ("snap", ["snap", "install"], True, None),
+)
+
+# Per-tool package names (or name + extra flags) for each package manager.
+TOOL_PACKAGES = {
+    "git": {
+        "apt-get": "git", "dnf": "git", "yum": "git", "pacman": "git", "zypper": "git",
+        "brew": "git", "winget": "Git.Git", "choco": "git",
+    },
+    "node": {
+        "apt-get": "nodejs", "dnf": "nodejs", "yum": "nodejs", "pacman": "nodejs", "zypper": "nodejs",
+        "brew": "node", "winget": "OpenJS.NodeJS.LTS", "choco": "nodejs-lts",
+        "snap": ["node", "--classic"],
+    },
+    "npm": {
+        "apt-get": "npm", "dnf": "npm", "yum": "npm", "pacman": "npm", "zypper": "npm",
+        "brew": "node", "winget": "OpenJS.NodeJS.LTS", "choco": "nodejs-lts",
+        "snap": ["node", "--classic"],
+    },
+    "docker": {
+        "apt-get": "docker.io", "dnf": "docker", "yum": "docker", "pacman": "docker", "zypper": "docker",
+        "brew": ["--cask", "docker"], "winget": "Docker.DockerDesktop", "choco": "docker-desktop",
+        "snap": "docker",
+    },
+    "code": {
+        "brew": ["--cask", "visual-studio-code"], "winget": "Microsoft.VisualStudioCode", "choco": "vscode",
+        "snap": ["code", "--classic"],
+    },
+    "gh": {
+        "apt-get": "gh", "dnf": "gh", "pacman": "github-cli", "zypper": "gh",
+        "brew": "gh", "winget": "GitHub.cli", "choco": "gh",
+    },
+}
+
+_APT_UPDATED = False
+
+
+def _sudo_prefix():
+    if os.name == "nt":
+        return []
+    try:
+        if os.geteuid() == 0:
+            return []
+    except AttributeError:
+        return []
+    if shutil.which("sudo"):
+        return ["sudo"]
+    return []
+
+
+def _install_strategies(tool):
+    """Yield (description, command) install strategies for a tool, best-first."""
+    packages = TOOL_PACKAGES.get(tool, {})
+    for manager, install_cmd, needs_sudo, prepare in PKG_MANAGERS:
+        pkg = packages.get(manager)
+        if pkg is None or not shutil.which(manager):
+            continue
+        prefix = _sudo_prefix() if needs_sudo else []
+        pkg_args = pkg if isinstance(pkg, list) else [pkg]
+        yield (manager, prefix, install_cmd, pkg_args, prepare)
+
+
+def _docker_convenience_script():
+    """Official Docker convenience script fallback for Linux (https://get.docker.com)."""
+    if sys.platform != "linux" or not check_tool("curl"):
+        return None
+    import tempfile
+
+    fd, path = tempfile.mkstemp(prefix="get-docker-", suffix=".sh")
+    os.close(fd)
+    try:
+        if run(["curl", "-fsSL", "https://get.docker.com", "-o", path], check=False).returncode != 0:
+            return False
+        return run(_sudo_prefix() + ["sh", path], check=False).returncode == 0
+    finally:
+        try:
+            os.unlink(path)
+        except OSError:
+            pass
+
+
+def auto_install_tool(tool):
+    """Never-fail installer: try every available package manager until the tool exists.
+
+    Returns True when the tool is available afterwards, False otherwise.
+    """
+    global _APT_UPDATED
+    if check_tool(tool):
+        return True
+
+    tried = []
+    for manager, prefix, install_cmd, pkg_args, prepare in _install_strategies(tool):
+        if prepare and manager == "apt-get" and not _APT_UPDATED:
+            run(prefix + prepare, check=False)
+            _APT_UPDATED = True
+        cmd = prefix + install_cmd + pkg_args
+        print_info(f"Auto-install {tool} via {manager}: {' '.join(cmd)}")
+        res = run(cmd, check=False)
+        tried.append(manager)
+        if res.returncode == 0 and check_tool(tool):
+            print_ok(f"Auto-installed: {tool} (via {manager})")
+            log_action(f"auto-install: {tool}", "ok", manager)
+            return True
+        detail = (res.stderr or "").strip().splitlines()
+        if detail:
+            print_warn(f"{manager} failed for {tool}: {detail[-1]}")
+
+    if tool == "docker":
+        print_info("Trying official Docker convenience script (get.docker.com)...")
+        result = _docker_convenience_script()
+        if result and check_tool("docker"):
+            print_ok("Auto-installed: docker (via get.docker.com)")
+            log_action("auto-install: docker", "ok", "get.docker.com")
+            return True
+
+    log_action(f"auto-install: {tool}", "failed", f"tried: {', '.join(tried) or 'no package manager found'}")
+    return False
+
+
 def dev_setup(args):
     """Install/verify developer environment: core tools, npm globals, Python packages."""
     print_info("== Development environment setup ==")
 
-    for tool, hint in (
-        ("git", "https://git-scm.com"),
-        ("node", "https://nodejs.org"),
-        ("npm", "comes with Node.js"),
-        ("docker", "https://docs.docker.com/get-docker/"),
-        ("code", "https://code.visualstudio.com"),
-    ):
+    auto = not getattr(args, "no_auto_install", False)
+    for tool, hint in CORE_TOOLS:
         if check_tool(tool):
             print_ok(f"Found: {tool}")
             log_action(f"dev-setup: {tool}", "ok")
-        else:
-            print_warn(f"Missing: {tool} ({hint})")
-            log_action(f"dev-setup: {tool}", "missing", hint)
+            continue
+        if auto:
+            print_warn(f"Missing: {tool} - attempting automatic install...")
+            if auto_install_tool(tool):
+                continue
+        print_warn(f"Missing: {tool} ({hint})")
+        log_action(f"dev-setup: {tool}", "missing", hint)
 
     if check_tool("npm") and not args.skip_npm:
         print_info("Installing global npm packages...")
@@ -945,6 +1083,27 @@ def dev_setup(args):
         print_warn("Skipping Python packages (--skip-python).")
 
     print_ok("Development environment setup finished.")
+
+
+def auto_heal(args):
+    """One-shot self-healing repair: install everything missing after a PC format."""
+    print_info("== Auto-heal: never-fail environment repair ==")
+    dev_setup(argparse.Namespace(skip_npm=False, skip_python=False, no_auto_install=False))
+    print()
+    extensions(args)
+    print()
+    ai_setup(args)
+    print()
+
+    still_missing = [(tool, hint) for tool, hint in CORE_TOOLS if not check_tool(tool)]
+    if still_missing:
+        print_warn("Could not auto-install the following (manual install needed):")
+        for tool, hint in still_missing:
+            print(f"  - {tool}: {hint}")
+        log_action("auto-heal", "partial", ", ".join(tool for tool, _hint in still_missing))
+    else:
+        print_ok("Auto-heal complete: all core tools are installed.")
+        log_action("auto-heal", "ok")
 
 
 AI_PYTHON_PACKAGES = ("openai", "python-dotenv")
@@ -1238,7 +1397,7 @@ def restore(args):
     install(args)
     print()
     if getattr(args, "full", False):
-        dev_setup(argparse.Namespace(skip_npm=False, skip_python=False))
+        dev_setup(argparse.Namespace(skip_npm=False, skip_python=False, no_auto_install=False))
         ai_setup(args)
         config_restore(argparse.Namespace(backup_dir=str(CONFIG_BACKUP_DIR), snapshot=None))
         summary(args)
@@ -1350,7 +1509,13 @@ def build_parser():
     dev_p = sub.add_parser("dev-setup", help="Install/verify dev tools, npm globals and Python packages")
     dev_p.add_argument("--skip-npm", action="store_true", help="Skip global npm packages")
     dev_p.add_argument("--skip-python", action="store_true", help="Skip Python packages")
+    dev_p.add_argument("--no-auto-install", action="store_true", help="Only report missing tools, don't auto-install them")
     dev_p.set_defaults(func=dev_setup)
+
+    sub.add_parser(
+        "auto-heal",
+        help="Never-fail repair: auto-install missing tools (docker, node, code, gh...), extensions and packages",
+    ).set_defaults(func=auto_heal)
 
     sub.add_parser(
         "ai-setup",
