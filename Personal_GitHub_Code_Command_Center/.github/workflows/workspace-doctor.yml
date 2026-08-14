@@ -1,0 +1,26 @@
+name: Workspace Doctor
+
+on:
+  push:
+  pull_request:
+  workflow_dispatch:
+
+jobs:
+  doctor:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Shell syntax check
+        run: |
+          bash -n scripts/*.sh
+
+      - name: Secret scan
+        run: |
+          bash scripts/secret-scan.sh .
+
+      - name: List files
+        run: |
+          find . -maxdepth 3 -type f | sort

@@ -1,0 +1,15 @@
+{
+  "name": "personal-github-code-command-center",
+  "version": "1.0.0",
+  "private": true,
+  "description": "Personal VS Code and GitHub command center workspace",
+  "scripts": {
+    "setup": "bash scripts/setup.sh",
+    "doctor": "bash scripts/doctor.sh",
+    "scan": "bash scripts/secret-scan.sh .",
+    "sync": "bash scripts/sync-all.sh",
+    "nested": "bash scripts/find-nested-repos.sh",
+    "tree": "bash scripts/tree.sh",
+    "auth": "bash scripts/auth-check.sh"
+  }
+}

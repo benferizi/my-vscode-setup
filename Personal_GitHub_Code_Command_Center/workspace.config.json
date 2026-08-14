@@ -1,0 +1,21 @@
+{
+  "workspaceRoot": "~/code",
+  "categories": [
+    "work",
+    "personal",
+    "learning",
+    "experiments",
+    "archive"
+  ],
+  "rules": {
+    "noNestedRepos": true,
+    "safePullOnlyWhenClean": true,
+    "blockEnvFilesInCommits": true,
+    "useMainAsDefaultBranch": true
+  },
+  "dailyCommands": {
+    "status": "./scripts/doctor.sh",
+    "sync": "./scripts/sync-all.sh",
+    "scan": "./scripts/secret-scan.sh"
+  }
+}
