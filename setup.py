@@ -1313,6 +1313,109 @@ def ai_setup(_args):
     print_ok("AI stack setup finished.")
 
 
+APPIMAGE_INSTALL_DIR = Path.home() / "Applications"
+APPIMAGE_BIN_DIR = Path.home() / ".local" / "bin"
+APPIMAGE_DESKTOP_DIR = Path.home() / ".local" / "share" / "applications"
+
+COPILOT_DESKTOP_ENTRY = """[Desktop Entry]
+Name=GitHub Copilot
+Comment=GitHub Copilot desktop app
+Exec={exec_path} %U
+Terminal=false
+Type=Application
+Categories=Development;
+StartupWMClass=GitHub Copilot
+"""
+
+
+def _find_copilot_appimage(explicit):
+    """Locate the Copilot AppImage: explicit path first, then common folders."""
+    if explicit:
+        path = Path(explicit).expanduser().resolve()
+        if not path.exists():
+            raise RuntimeError(f"AppImage not found: {path}")
+        return path
+    candidates = []
+    for folder in (Path.cwd(), Path.home() / "Downloads", Path.home(), WORKSPACE / "personal"):
+        if not folder.exists():
+            continue
+        for entry in folder.glob("*.AppImage"):
+            if "copilot" in entry.name.lower():
+                candidates.append(entry)
+    if not candidates:
+        raise RuntimeError(
+            "No GitHub Copilot AppImage found. Download it first, then run:\n"
+            "  python3 setup.py copilot-app --file /path/to/GitHub-Copilot-linux-x64.AppImage"
+        )
+    return max(candidates, key=lambda p: p.stat().st_mtime)
+
+
+def copilot_app(args):
+    """Install the GitHub Copilot AppImage properly: ~/Applications, launcher, desktop entry."""
+    print_info("== GitHub Copilot AppImage install ==")
+    if os.name == "nt":
+        raise RuntimeError("AppImage install is for Linux only.")
+
+    source = _find_copilot_appimage(args.file)
+    print_ok(f"Found AppImage: {source}")
+
+    APPIMAGE_INSTALL_DIR.mkdir(parents=True, exist_ok=True)
+    target = APPIMAGE_INSTALL_DIR / "GitHub-Copilot.AppImage"
+    if source.resolve() != target.resolve():
+        shutil.copy2(source, target)
+        print_ok(f"Installed to: {target}")
+    else:
+        print_ok(f"Already in place: {target}")
+    target.chmod(0o755)
+    print_ok("Made executable (chmod 755).")
+    log_action("copilot-app: install", "ok", str(target))
+
+    APPIMAGE_BIN_DIR.mkdir(parents=True, exist_ok=True)
+    launcher = APPIMAGE_BIN_DIR / "github-copilot"
+    if launcher.is_symlink() or launcher.exists():
+        launcher.unlink()
+    launcher.symlink_to(target)
+    print_ok(f"Launcher command: {launcher} (run: github-copilot)")
+    if str(APPIMAGE_BIN_DIR) not in os.environ.get("PATH", ""):
+        print_warn(f"{APPIMAGE_BIN_DIR} is not in PATH. Add to ~/.bashrc: export PATH=\"$HOME/.local/bin:$PATH\"")
+    log_action("copilot-app: launcher", "ok", str(launcher))
+
+    APPIMAGE_DESKTOP_DIR.mkdir(parents=True, exist_ok=True)
+    desktop_file = APPIMAGE_DESKTOP_DIR / "github-copilot.desktop"
+    desktop_file.write_text(COPILOT_DESKTOP_ENTRY.format(exec_path=target), encoding="utf-8")
+    desktop_file.chmod(0o755)
+    print_ok(f"Desktop entry created: {desktop_file} (app menu integration)")
+    if check_tool("update-desktop-database"):
+        run(["update-desktop-database", str(APPIMAGE_DESKTOP_DIR)], check=False)
+    log_action("copilot-app: desktop entry", "ok", str(desktop_file))
+
+    fuse_ok = any(check_tool(tool) for tool in ("fusermount", "fusermount3"))
+    if not fuse_ok:
+        print_warn("FUSE not detected - AppImages need it. Install with: sudo apt install libfuse2")
+        log_action("copilot-app: fuse", "missing", "sudo apt install libfuse2")
+
+    if check_tool("code"):
+        installed = set(run(["code", "--list-extensions"], check=False).stdout.splitlines())
+        for ext in ("github.copilot", "github.copilot-chat"):
+            if ext in installed:
+                print_ok(f"Copilot extension installed: {ext}")
+                continue
+            status = install_extension(ext)
+            if status in ("ok", "builtin"):
+                print_ok(f"Copilot extension installed: {ext}")
+            else:
+                print_warn(f"Copilot extension missing: {ext} (run: python3 setup.py extensions)")
+    else:
+        print_warn("VS Code CLI 'code' not found. Copilot extensions not verified.")
+
+    print_info("Final steps:")
+    print("  1. Launch it: github-copilot   (or from your app menu: 'GitHub Copilot')")
+    print("  2. Sign in with your GitHub account to activate Copilot Pro+.")
+    print("  3. In VS Code, sign in via the Accounts menu for in-editor Copilot.")
+    print_ok("GitHub Copilot AppImage setup finished.")
+    log_action("copilot-app", "ok")
+
+
 def config_backup(args):
     """Back up key config files and ~/Projects/personal into the backup directory."""
     backup_dir = Path(args.backup_dir).expanduser().resolve()
@@ -1667,6 +1770,13 @@ def build_parser():
         "ai-setup",
         help="AI stack: OpenAI SDK, safe .env template, Copilot extension checks, no-conflict advice",
     ).set_defaults(func=ai_setup)
+
+    copilot_p = sub.add_parser(
+        "copilot-app",
+        help="Install the GitHub Copilot AppImage: ~/Applications, launcher command, app-menu entry, extension checks",
+    )
+    copilot_p.add_argument("--file", help="Path to the downloaded GitHub-Copilot-linux-x64.AppImage (auto-detected if omitted)")
+    copilot_p.set_defaults(func=copilot_app)
 
     config_p = sub.add_parser("config", help="Backup/restore key config files and personal projects")
     config_sub = config_p.add_subparsers(dest="config_command", required=True)
