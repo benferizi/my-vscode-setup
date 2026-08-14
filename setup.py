@@ -783,6 +783,33 @@ def secret_scan(_args):
     print_ok("No obvious secrets found.")
 
 
+def pip_install(pkg):
+    """Install a Python package with pip, retrying for PEP 668 externally-managed environments."""
+    res = run([sys.executable, "-m", "pip", "install", "--user", pkg], check=False)
+    if res.returncode != 0 and "externally-managed-environment" in (res.stderr or "") + (res.stdout or ""):
+        res = run(
+            [sys.executable, "-m", "pip", "install", "--user", "--break-system-packages", pkg],
+            check=False,
+        )
+    return res
+
+
+def pip_failure_detail(res):
+    """Return the last non-empty stderr line of a failed pip run, if any."""
+    lines = [line.strip() for line in (res.stderr or "").splitlines() if line.strip()]
+    return lines[-1] if lines else ""
+
+
+def install_extension(ext):
+    """Install a VS Code extension. Returns 'ok', 'builtin' or 'failed'."""
+    res = run(["code", "--install-extension", ext], check=False)
+    if res.returncode == 0:
+        return "ok"
+    if "built-in extension" in (res.stderr or "") + (res.stdout or ""):
+        return "builtin"
+    return "failed"
+
+
 def extensions(_args):
     if not check_tool("code"):
         print_warn("VS Code CLI 'code' is not in PATH. Skipping extension installation.")
@@ -797,6 +824,8 @@ def extensions(_args):
         res = run(["code", "--install-extension", ext], check=False)
         if res.returncode == 0:
             print_ok(f"Installed: {ext}")
+        elif "built-in extension" in (res.stderr or "") + (res.stdout or ""):
+            print_ok(f"Built into this VS Code build (nothing to install): {ext}")
         else:
             print_warn(f"Failed: {ext}")
             if res.stderr.strip():
@@ -904,13 +933,14 @@ def dev_setup(args):
     if not args.skip_python:
         print_info("Installing Python packages...")
         for pkg in PYTHON_PACKAGES:
-            res = run([sys.executable, "-m", "pip", "install", "--user", pkg], check=False)
+            res = pip_install(pkg)
             if res.returncode == 0:
                 print_ok(f"pip: {pkg}")
                 log_action(f"dev-setup: pip {pkg}", "ok")
             else:
-                print_warn(f"pip failed: {pkg}")
-                log_action(f"dev-setup: pip {pkg}", "failed")
+                detail = pip_failure_detail(res)
+                print_warn(f"pip failed: {pkg}" + (f" ({detail})" if detail else ""))
+                log_action(f"dev-setup: pip {pkg}", "failed", detail)
     else:
         print_warn("Skipping Python packages (--skip-python).")
 
@@ -931,13 +961,14 @@ def ai_setup(_args):
 
     print_info("Installing OpenAI SDK Python packages...")
     for pkg in AI_PYTHON_PACKAGES:
-        res = run([sys.executable, "-m", "pip", "install", "--user", pkg], check=False)
+        res = pip_install(pkg)
         if res.returncode == 0:
             print_ok(f"pip: {pkg}")
             log_action(f"ai-setup: pip {pkg}", "ok")
         else:
-            print_warn(f"pip failed: {pkg}")
-            log_action(f"ai-setup: pip {pkg}", "failed")
+            detail = pip_failure_detail(res)
+            print_warn(f"pip failed: {pkg}" + (f" ({detail})" if detail else ""))
+            log_action(f"ai-setup: pip {pkg}", "failed", detail)
 
     env_example = WORKSPACE / "personal" / ".env.example"
     env_example.parent.mkdir(parents=True, exist_ok=True)
@@ -954,6 +985,14 @@ def ai_setup(_args):
             if ext in installed:
                 print_ok(f"Copilot extension installed: {ext}")
                 log_action(f"ai-setup: {ext}", "ok")
+                continue
+            status = install_extension(ext)
+            if status == "ok":
+                print_ok(f"Copilot extension installed: {ext}")
+                log_action(f"ai-setup: {ext}", "ok")
+            elif status == "builtin":
+                print_ok(f"Copilot extension built into this VS Code build: {ext}")
+                log_action(f"ai-setup: {ext}", "ok", "built-in")
             else:
                 print_warn(f"Copilot extension missing: {ext} (run: python setup.py extensions)")
                 log_action(f"ai-setup: {ext}", "missing")
