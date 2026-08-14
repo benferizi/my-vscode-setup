@@ -1526,6 +1526,45 @@ def copilot_app(args):
     log_action("copilot-app", "ok")
 
 
+COPILOT_WEB_LAUNCHER_SCRIPT = """#!/usr/bin/env bash
+# 'copilot' terminal command (created by setup.py copilot-web).
+# Opens GitHub Copilot Chat in your default web browser.
+#
+# Usage:
+#   copilot            open https://github.com/copilot
+#   copilot <url>      open a custom URL instead (e.g. https://vscode.dev)
+
+URL="${1:-https://github.com/copilot}"
+
+for opener in xdg-open gio open sensible-browser x-www-browser; do
+  if command -v "$opener" >/dev/null 2>&1; then
+    if [ "$opener" = "gio" ]; then
+      exec gio open "$URL"
+    fi
+    exec "$opener" "$URL"
+  fi
+done
+
+echo "No browser opener found (xdg-open/gio). Open manually: $URL" >&2
+exit 1
+"""
+
+
+def _install_copilot_web_launcher():
+    """Install the 'copilot' terminal command that opens github.com/copilot in the browser."""
+    APPIMAGE_BIN_DIR.mkdir(parents=True, exist_ok=True)
+    launcher = APPIMAGE_BIN_DIR / "copilot"
+    if launcher.is_symlink() or launcher.exists():
+        launcher.unlink()
+    launcher.write_text(COPILOT_WEB_LAUNCHER_SCRIPT, encoding="utf-8")
+    launcher.chmod(0o755)
+    print_ok(f"Terminal command installed: {launcher}")
+    print_info("Type 'copilot' in any terminal to open https://github.com/copilot in your browser.")
+    if str(APPIMAGE_BIN_DIR) not in os.environ.get("PATH", ""):
+        print_warn(f"{APPIMAGE_BIN_DIR} is not in PATH. Add to ~/.bashrc: export PATH=\"$HOME/.local/bin:$PATH\"")
+    log_action("copilot-web: 'copilot' command", "ok", str(launcher))
+
+
 def copilot_web(args):
     """Browser-based Copilot: use VS Code + Copilot fully in the browser, no desktop app needed."""
     print_info("== GitHub Copilot in the BROWSER (no desktop app, no AppImage, no GPU/F11 problems) ==")
@@ -1553,11 +1592,16 @@ def copilot_web(args):
 
     # 3. Quick browser entry points that need zero setup.
     print_info("Option 3 - zero-setup browser entry points")
-    print("  - Copilot Chat in the browser:  https://github.com/copilot")
+    print("  - Copilot Chat in the browser:  https://github.com/copilot  (or just type: copilot)")
     print("  - Quick repo editing:           https://github.dev/<owner>/<repo>  (press '.' on any repo page)")
     print("  - Lightweight editor:           https://vscode.dev")
     print("  All of them use your GitHub sign-in; Copilot Pro+ activates automatically.")
     print()
+
+    # Install the 'copilot' terminal command (opens github.com/copilot in the browser).
+    if os.name != "nt":
+        _install_copilot_web_launcher()
+        print()
 
     # Verify/install the extensions locally so the tunnel (Option 2) has everything too.
     if check_tool("code"):
@@ -1592,8 +1636,8 @@ def copilot_web(args):
             log_action("copilot-web: tunnel", "failed")
 
     print_info("Final steps:")
-    print("  1. Open https://github.com/codespaces in your browser and create a codespace, OR")
-    print("     open https://github.com/copilot for Copilot Chat right away.")
+    print("  1. Type 'copilot' in your terminal to open Copilot Chat in the browser, OR")
+    print("     open https://github.com/codespaces and create a codespace for full VS Code.")
     print("  2. Sign in with your GitHub account - Copilot Pro+ activates automatically.")
     print("  3. Turn on Settings Sync in the browser editor so your setup follows you everywhere.")
     print_ok("Browser-based Copilot setup finished. No desktop app needed.")

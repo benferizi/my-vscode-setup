@@ -67,7 +67,7 @@ If the desktop Copilot app doesn't work on your machine, use Copilot entirely in
 python setup.py copilot-web
 ```
 
-Easiest path: open <https://github.com/codespaces>, create a codespace on this repo, and full VS Code opens in the browser with Copilot + all recommended extensions installed automatically (via `.devcontainer/devcontainer.json`). Copilot Chat is also available directly at <https://github.com/copilot>.
+Easiest path: open <https://github.com/codespaces>, create a codespace on this repo, and full VS Code opens in the browser with Copilot + all recommended extensions installed automatically (via `.devcontainer/devcontainer.json`). Copilot Chat is also available directly at <https://github.com/copilot> — after running the command above, just type `copilot` in any terminal to open it.
 
 ## 3) Restore after PC format
 
@@ -101,7 +101,7 @@ python setup.py restore --full
   Install or verify recommended extensions.
 
 - `python setup.py copilot-web [--tunnel]`  
-  Use Copilot fully in the **browser** — no desktop app, no AppImage, no GPU/F11 problems. Shows the three browser options (GitHub Codespaces with all extensions auto-installed via `.devcontainer/devcontainer.json`, a vscode.dev tunnel to your machine with `--tunnel`, and zero-setup entry points like github.com/copilot and github.dev), and verifies/installs all recommended extensions locally.
+  Use Copilot fully in the **browser** — no desktop app, no AppImage, no GPU/F11 problems. Installs a `copilot` terminal command that opens Copilot Chat (`https://github.com/copilot`) in your default browser, shows the three browser options (GitHub Codespaces with all extensions auto-installed via `.devcontainer/devcontainer.json`, a vscode.dev tunnel to your machine with `--tunnel`, and zero-setup entry points like github.com/copilot and github.dev), and verifies/installs all recommended extensions locally.
 
 - `python setup.py github-setup [--name NAME] [--email EMAIL] [--ssh]`  
   Premium GitHub setup: check/verify `gh` CLI and auth status, configure git identity, create an ed25519 SSH key (with `--ssh`), and show the Copilot Pro+ activation checklist.
