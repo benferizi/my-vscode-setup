@@ -17,11 +17,14 @@ Run this single command on a fresh machine — it clones the repo and runs the f
 curl -fsSL https://raw.githubusercontent.com/benferizi/my-vscode-setup/main/install.sh | bash
 ```
 
-Or, if you already cloned the repo:
+Or, if you already cloned the repo (the script is *inside* the repo folder, so `cd` into it first):
 
 ```bash
+cd my-vscode-setup
 bash install.sh
 ```
+
+> **Note:** `install.sh` only exists on `main` after this change is merged. If a fresh clone doesn't contain it, merge the PR that added it (or pull the latest `main`) first.
 
 ## Quick start
 
