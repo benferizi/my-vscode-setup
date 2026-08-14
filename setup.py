@@ -1526,6 +1526,80 @@ def copilot_app(args):
     log_action("copilot-app", "ok")
 
 
+def copilot_web(args):
+    """Browser-based Copilot: use VS Code + Copilot fully in the browser, no desktop app needed."""
+    print_info("== GitHub Copilot in the BROWSER (no desktop app, no AppImage, no GPU/F11 problems) ==")
+    print_info("The desktop app is optional. Everything below runs in your normal web browser.")
+    print()
+
+    # 1. Codespaces: full VS Code in the browser, extensions auto-installed via .devcontainer.
+    print_info("Option 1 (recommended) - GitHub Codespaces: full VS Code in the browser")
+    print("  1. Open https://github.com/codespaces (sign in with your GitHub account).")
+    print("  2. Click 'New codespace' and pick your repository (e.g. benferizi/my-vscode-setup).")
+    print("  3. VS Code opens IN THE BROWSER with Copilot + all recommended extensions installed")
+    print("     automatically (this repo ships .devcontainer/devcontainer.json listing every extension).")
+    print("  4. Nothing to install locally, nothing breaks after a PC format.")
+    print()
+
+    # 2. vscode.dev tunnel: browser VS Code connected to this machine's files.
+    print_info("Option 2 - vscode.dev tunnel: browser VS Code connected to THIS machine's files")
+    if check_tool("code"):
+        print("  Run once:   code tunnel service install --accept-server-license-terms")
+        print("  Then open the printed https://vscode.dev/tunnel/... link in any browser.")
+        print("  (Or run it now with: python3 setup.py copilot-web --tunnel)")
+    else:
+        print("  Install VS Code first (python3 setup.py dev-setup), then re-run this command.")
+    print()
+
+    # 3. Quick browser entry points that need zero setup.
+    print_info("Option 3 - zero-setup browser entry points")
+    print("  - Copilot Chat in the browser:  https://github.com/copilot")
+    print("  - Quick repo editing:           https://github.dev/<owner>/<repo>  (press '.' on any repo page)")
+    print("  - Lightweight editor:           https://vscode.dev")
+    print("  All of them use your GitHub sign-in; Copilot Pro+ activates automatically.")
+    print()
+
+    # Verify/install the extensions locally so the tunnel (Option 2) has everything too.
+    if check_tool("code"):
+        print_info("Verifying all recommended extensions for browser-tunnel use...")
+        installed = set(run(["code", "--list-extensions"], check=False).stdout.splitlines())
+        for ext in EXTENSIONS:
+            if ext in installed:
+                print_ok(f"Extension installed: {ext}")
+                continue
+            status = install_extension(ext)
+            if status in ("ok", "builtin"):
+                print_ok(f"Extension installed: {ext}")
+            else:
+                print_warn(f"Extension missing: {ext} (run: python3 setup.py extensions)")
+    else:
+        print_warn("VS Code CLI 'code' not found - skipping local extension install.")
+        print_info("Not a problem for Option 1 (Codespaces): extensions install automatically in the browser.")
+
+    if getattr(args, "tunnel", False):
+        if not check_tool("code"):
+            raise RuntimeError("VS Code CLI 'code' not found. Install VS Code first: python3 setup.py dev-setup")
+        print_info("Starting the VS Code tunnel service (sign in with GitHub when prompted)...")
+        res = subprocess.run(
+            ["code", "tunnel", "service", "install", "--accept-server-license-terms"],
+            check=False,
+        )
+        if res.returncode == 0:
+            print_ok("Tunnel service installed. Open https://vscode.dev and pick your machine under 'Remote Tunnels'.")
+            log_action("copilot-web: tunnel", "ok")
+        else:
+            print_warn("Tunnel service install failed. Run manually: code tunnel --accept-server-license-terms")
+            log_action("copilot-web: tunnel", "failed")
+
+    print_info("Final steps:")
+    print("  1. Open https://github.com/codespaces in your browser and create a codespace, OR")
+    print("     open https://github.com/copilot for Copilot Chat right away.")
+    print("  2. Sign in with your GitHub account - Copilot Pro+ activates automatically.")
+    print("  3. Turn on Settings Sync in the browser editor so your setup follows you everywhere.")
+    print_ok("Browser-based Copilot setup finished. No desktop app needed.")
+    log_action("copilot-web", "ok")
+
+
 def config_backup(args):
     """Back up key config files and ~/Projects/personal into the backup directory."""
     backup_dir = Path(args.backup_dir).expanduser().resolve()
@@ -1887,6 +1961,13 @@ def build_parser():
     )
     copilot_p.add_argument("--file", help="Path to the downloaded GitHub-Copilot-linux-x64.AppImage (auto-detected if omitted)")
     copilot_p.set_defaults(func=copilot_app)
+
+    copilot_web_p = sub.add_parser(
+        "copilot-web",
+        help="Use Copilot fully in the BROWSER (no desktop app): Codespaces, vscode.dev tunnel, github.dev, extension checks",
+    )
+    copilot_web_p.add_argument("--tunnel", action="store_true", help="Also install the VS Code tunnel service for vscode.dev browser access to this machine")
+    copilot_web_p.set_defaults(func=copilot_web)
 
     config_p = sub.add_parser("config", help="Backup/restore key config files and personal projects")
     config_sub = config_p.add_subparsers(dest="config_command", required=True)

@@ -59,6 +59,16 @@ code ultimate.code-workspace
 In VS Code, sign in to GitHub and enable Settings Sync.
 Copilot Pro+ features will activate from your GitHub account.
 
+### Prefer the browser? (desktop app not needed)
+
+If the desktop Copilot app doesn't work on your machine, use Copilot entirely in the browser:
+
+```bash
+python setup.py copilot-web
+```
+
+Easiest path: open <https://github.com/codespaces>, create a codespace on this repo, and full VS Code opens in the browser with Copilot + all recommended extensions installed automatically (via `.devcontainer/devcontainer.json`). Copilot Chat is also available directly at <https://github.com/copilot>.
+
 ## 3) Restore after PC format
 
 1. Install Git
@@ -89,6 +99,9 @@ python setup.py restore --full
 
 - `python setup.py extensions`  
   Install or verify recommended extensions.
+
+- `python setup.py copilot-web [--tunnel]`  
+  Use Copilot fully in the **browser** — no desktop app, no AppImage, no GPU/F11 problems. Shows the three browser options (GitHub Codespaces with all extensions auto-installed via `.devcontainer/devcontainer.json`, a vscode.dev tunnel to your machine with `--tunnel`, and zero-setup entry points like github.com/copilot and github.dev), and verifies/installs all recommended extensions locally.
 
 - `python setup.py github-setup [--name NAME] [--email EMAIL] [--ssh]`  
   Premium GitHub setup: check/verify `gh` CLI and auth status, configure git identity, create an ed25519 SSH key (with `--ssh`), and show the Copilot Pro+ activation checklist.
