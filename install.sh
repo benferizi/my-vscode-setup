@@ -20,6 +20,8 @@ set -euo pipefail
 
 REPO_URL="https://github.com/benferizi/my-vscode-setup.git"
 TARGET_DIR="$HOME/code/personal/my-vscode-setup"
+# Branch that contains the toolkit (setup.py). Used as a fallback until it is merged into main.
+TOOLKIT_BRANCH="copilot/merge-two-setups-into-one"
 
 info() { printf '\033[34m[INFO]\033[0m %s\n' "$*"; }
 ok()   { printf '\033[32m[OK]\033[0m %s\n' "$*"; }
@@ -50,6 +52,22 @@ fi
 
 # --- Run the full automated setup ------------------------------------------
 cd "$TARGET_DIR"
+
+# If setup.py is missing (e.g. the clone is on a main branch that predates the
+# toolkit merge), switch to the branch that contains it.
+if [ ! -f "setup.py" ]; then
+    info "setup.py not found on the current branch. Fetching toolkit branch: $TOOLKIT_BRANCH"
+    git fetch origin "$TOOLKIT_BRANCH"
+    git checkout "$TOOLKIT_BRANCH" || git checkout -b "$TOOLKIT_BRANCH" "origin/$TOOLKIT_BRANCH"
+    git pull --ff-only origin "$TOOLKIT_BRANCH" || true
+fi
+
+if [ ! -f "setup.py" ]; then
+    err "setup.py still not found in $TARGET_DIR."
+    err "Merge the toolkit PR into main (https://github.com/benferizi/my-vscode-setup/pulls) and re-run."
+    exit 1
+fi
+
 info "Running full restore (install + dev tools + config restore + summary)..."
 python3 setup.py restore --full
 
