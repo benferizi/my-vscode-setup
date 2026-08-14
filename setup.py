@@ -531,8 +531,10 @@ def create_if_missing(path, content):
 
 
 def kit(_args):
-    root = current_repo_root()
+    kit_files(current_repo_root())
 
+
+def kit_files(root):
     create_if_missing(
         root / ".editorconfig",
         """root = true
@@ -650,10 +652,16 @@ Keep this README updated.
 
 
 def hook(_args):
-    root = current_repo_root()
+    install_hook(current_repo_root())
+
+
+def install_hook(root):
+    root = Path(root)
     hooks_dir = Path(
         run(["git", "-C", str(root), "rev-parse", "--git-path", "hooks"]).stdout.strip()
     )
+    if not hooks_dir.is_absolute():
+        hooks_dir = root / hooks_dir
     hooks_dir.mkdir(parents=True, exist_ok=True)
 
     hook_content = f"""#!/usr/bin/env bash
@@ -688,6 +696,46 @@ exit 0
     if os.name != "nt":
         hook_path.chmod(0o755)
     print_ok(f"Installed pre-commit hook: {hook_path}")
+
+
+def scaffold_project(target, name):
+    """Create a project folder with git init, kit files and the safety hook."""
+    if target.exists():
+        raise RuntimeError(f"Already exists: {target}")
+    if not re.fullmatch(r"[A-Za-z0-9._-]+", name):
+        raise ValueError("Project name may only contain letters, numbers, '.', '-' and '_'.")
+
+    target.mkdir(parents=True)
+    print_ok(f"Created project folder: {target}")
+
+    has_git = check_tool("git")
+    if has_git:
+        run(["git", "init"], check=False, cwd=str(target))
+        print_ok("Initialized git repository.")
+    else:
+        print_warn("git not found: skipping 'git init' and pre-commit hook.")
+
+    (target / "README.md").write_text(f"# {name}\n", encoding="utf-8")
+    kit_files(target)
+
+    if has_git and is_git_repo(target):
+        install_hook(target)
+
+    log_action(f"new-project: {target}", "ok")
+    return target
+
+
+def new_project(args):
+    """Create a new project in the workspace: folder + git init + kit files + hook."""
+    ensure_workspace()
+    validate_category(args.category)
+    target = WORKSPACE / args.category / args.name
+    scaffold_project(target, args.name)
+    print()
+    print_info("Next steps:")
+    print(f"  cd {target}")
+    print(f"  code {target}")
+    print("  git remote add origin <your-github-repo-url>   # after creating the repo on GitHub")
 
 
 def is_binary_file(path):
@@ -1105,12 +1153,7 @@ def _menu_create_project():
     if target.exists():
         print_warn(f"Already exists: {target}")
         return
-    target.mkdir(parents=True)
-    if check_tool("git"):
-        run(["git", "init"], check=False, cwd=str(target))
-    (target / "README.md").write_text(f"# {name}\n", encoding="utf-8")
-    print_ok(f"Created project: {target}")
-    log_action(f"menu: project {name}", "ok")
+    scaffold_project(target, name)
 
 
 def menu(args):
@@ -1234,6 +1277,11 @@ def build_parser():
     add_p.add_argument("git_url")
     add_p.add_argument("name", nargs="?")
     add_p.set_defaults(func=add_repo)
+
+    new_p = sub.add_parser("new-project", help="Create a new project: folder + git init + kit files + safety hook")
+    new_p.add_argument("name", help="Project name (letters, numbers, '.', '-', '_')")
+    new_p.add_argument("--category", choices=CATEGORIES, default="personal", help="Workspace category (default: personal)")
+    new_p.set_defaults(func=new_project)
 
     import_p = sub.add_parser("import", help="Move an existing local repo into workspace")
     import_p.add_argument("category", choices=CATEGORIES)

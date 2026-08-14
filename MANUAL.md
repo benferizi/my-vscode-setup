@@ -122,6 +122,9 @@ python setup.py restore --full
 - `python setup.py add <category> <git-url> [name]`  
   Clone a repository into the chosen category.
 
+- `python setup.py new-project <name> [--category <category>]`  
+  Create a brand-new project in `~/code/<category>/<name>` (default category: `personal`): creates the folder, runs `git init`, adds the kit starter files (README, .gitignore, .editorconfig, .gitattributes, .env.example, PR template) and installs the secret-blocking pre-commit hook.
+
 - `python setup.py import <category> <path> [name]`  
   Move an existing local git repo into workspace.
 

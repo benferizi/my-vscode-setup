@@ -80,3 +80,4 @@ echo "  2. Sign in to GitHub in VS Code (Accounts menu) -> activates Copilot Pro
 echo "  3. Sign in at https://chatgpt.com -> all your ChatGPT Pro projects are already there (cloud-stored)."
 echo "  4. Put your OPENAI_API_KEY in a .env file (see ~/code/personal/.env.example). Never commit it."
 echo "  5. Optional GitHub setup: python3 setup.py github-setup --name 'Your Name' --email 'you@example.com' --ssh"
+echo "  6. Start a new project: python3 setup.py new-project <name> [--category work|personal|learning|experiments|archive]"

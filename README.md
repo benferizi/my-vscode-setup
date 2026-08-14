@@ -96,6 +96,7 @@ The toolkit uses:
 |---|---|
 | `python setup.py install` | First-time setup: creates workspace folders, installs Git defaults/aliases/global gitignore, installs VS Code extensions |
 | `python setup.py add <category> <git-url> [name]` | Clone repo into `~/code/<category>/` |
+| `python setup.py new-project <name> [--category <category>]` | Create a new project in `~/code/<category>/` (default `personal`): folder, `git init`, kit files (README, .gitignore, .editorconfig, ...) and safety pre-commit hook |
 | `python setup.py import <category> <path> [name]` | Move existing local Git repo into clean workspace |
 | `python setup.py sync` | Safe sync all repos (`git pull --ff-only`), skip dirty repos |
 | `python setup.py status` | Show short status for all repos |
