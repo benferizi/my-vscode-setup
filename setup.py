@@ -1329,10 +1329,32 @@ StartupWMClass=GitHub Copilot
 
 COPILOT_LAUNCHER_SCRIPT = """#!/usr/bin/env bash
 # GitHub Copilot AppImage launcher (created by setup.py copilot-app).
-# --disable-gpu-compositing fixes the frozen/partially-rendered window that the
-# Electron app shows on some Linux GPU/driver combos (Wayland, NVIDIA, VMs).
-# Still freezing? Run: github-copilot --disable-gpu
-exec "{appimage}" --disable-gpu-compositing "$@"
+# Fixes frozen / partially-rendered windows (blank sidebar, missing text) that
+# the Electron app shows on some Linux GPU/driver combos (Wayland, NVIDIA, VMs).
+#
+# IMPORTANT: the app is single-instance. Quit it completely (or run
+# 'pkill -f GitHub-Copilot.AppImage') before relaunching, otherwise new
+# flags are ignored and the existing window is simply focused.
+#
+# Usage:
+#   github-copilot            normal launch (GPU compositing off, X11 on Wayland)
+#   github-copilot --safe     full software rendering (slow but always draws)
+
+FLAGS=(--disable-gpu-compositing)
+
+# On Wayland the Chromium Wayland backend often leaves panels unpainted;
+# running through XWayland fixes it.
+if [ -n "$WAYLAND_DISPLAY" ] || [ "$XDG_SESSION_TYPE" = "wayland" ]; then
+  FLAGS+=(--ozone-platform=x11)
+fi
+
+if [ "$1" = "--safe" ]; then
+  shift
+  export LIBGL_ALWAYS_SOFTWARE=1
+  FLAGS+=(--disable-gpu --disable-software-rasterizer)
+fi
+
+exec "{appimage}" "${{FLAGS[@]}}" "$@"
 """
 
 
@@ -1385,7 +1407,7 @@ def copilot_app(args):
     launcher.write_text(COPILOT_LAUNCHER_SCRIPT.format(appimage=target), encoding="utf-8")
     launcher.chmod(0o755)
     print_ok(f"Launcher command: {launcher} (run: github-copilot)")
-    print_info("Launcher uses --disable-gpu-compositing to fix frozen/partial window rendering.")
+    print_info("Launcher disables GPU compositing and uses X11 on Wayland to fix frozen/partial rendering.")
     if str(APPIMAGE_BIN_DIR) not in os.environ.get("PATH", ""):
         print_warn(f"{APPIMAGE_BIN_DIR} is not in PATH. Add to ~/.bashrc: export PATH=\"$HOME/.local/bin:$PATH\"")
     log_action("copilot-app: launcher", "ok", str(launcher))
@@ -1422,7 +1444,10 @@ def copilot_app(args):
     print("  1. Launch it: github-copilot   (or from your app menu: 'GitHub Copilot')")
     print("  2. Sign in with your GitHub account to activate Copilot Pro+.")
     print("  3. In VS Code, sign in via the Accounts menu for in-editor Copilot.")
-    print("  Tip: if the window still freezes or renders partially, run: github-copilot --disable-gpu")
+    print("  Tip: rendering still broken (blank sidebar/missing text)?")
+    print("       a. Quit the app COMPLETELY first: pkill -f GitHub-Copilot.AppImage")
+    print("          (it is single-instance - relaunch flags are ignored while it runs)")
+    print("       b. Relaunch in software-rendering mode: github-copilot --safe")
     print_ok("GitHub Copilot AppImage setup finished.")
     log_action("copilot-app", "ok")
 
