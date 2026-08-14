@@ -1,0 +1,87 @@
+{
+  "folders": [
+    {
+      "name": "Command Center",
+      "path": "."
+    },
+    {
+      "name": "Work Repos",
+      "path": "~/code/work"
+    },
+    {
+      "name": "Personal Repos",
+      "path": "~/code/personal"
+    },
+    {
+      "name": "Learning Repos",
+      "path": "~/code/learning"
+    },
+    {
+      "name": "Experiments",
+      "path": "~/code/experiments"
+    },
+    {
+      "name": "Archive",
+      "path": "~/code/archive"
+    }
+  ],
+  "settings": {
+    "files.autoSave": "afterDelay",
+    "files.autoSaveDelay": 800,
+    "editor.formatOnSave": true,
+    "editor.tabSize": 2,
+    "editor.insertSpaces": true,
+    "editor.minimap.enabled": false,
+    "editor.rulers": [
+      80,
+      120
+    ],
+    "explorer.confirmDelete": true,
+    "explorer.confirmDragAndDrop": true,
+    "git.autofetch": true,
+    "git.confirmSync": true,
+    "git.enableSmartCommit": false,
+    "git.openRepositoryInParentFolders": "never",
+    "security.workspace.trust.untrustedFiles": "prompt",
+    "terminal.integrated.defaultProfile.linux": "bash",
+    "terminal.integrated.defaultProfile.osx": "zsh",
+    "terminal.integrated.defaultProfile.windows": "Git Bash",
+    "search.exclude": {
+      "**/.git": true,
+      "**/node_modules": true,
+      "**/.venv": true,
+      "**/venv": true,
+      "**/dist": true,
+      "**/build": true,
+      "**/coverage": true
+    },
+    "files.exclude": {
+      "**/.DS_Store": true,
+      "**/Thumbs.db": true
+    },
+    "editor.inlineSuggest.enabled": true,
+    "github.copilot.enable": {
+      "*": true,
+      "plaintext": false,
+      "markdown": true,
+      "scminput": false
+    },
+    "github.copilot.chat.editor.temporalContext.enabled": true
+  },
+  "extensions": {
+    "recommendations": [
+      "github.vscode-github-actions",
+      "eamodio.gitlens",
+      "github.vscode-pull-request-github",
+      "editorconfig.editorconfig",
+      "ms-azuretools.vscode-docker",
+      "redhat.vscode-yaml",
+      "davidanson.vscode-markdownlint",
+      "esbenp.prettier-vscode",
+      "streetsidesoftware.code-spell-checker",
+      "github.copilot",
+      "github.copilot-chat",
+      "ms-python.python"
+    ]
+  }
+}
