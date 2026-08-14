@@ -66,7 +66,14 @@ The toolkit uses:
 | `python setup.py hook` | Install pre-commit hook that blocks common secret mistakes (`SKIP_GHX_HOOK=1` bypass) |
 | `python setup.py secret-scan` | Basic secret scan for current repo |
 | `python setup.py extensions` | Install/verify recommended VS Code extensions |
-| `python setup.py restore` | Full restore flow (install + extensions + next steps) |
+| `python setup.py github-setup [--name N] [--email E] [--ssh]` | Premium GitHub setup: gh CLI check + auth status, git identity, ed25519 SSH key, Copilot Pro+ checklist |
+| `python setup.py dev-setup [--skip-npm] [--skip-python]` | Install/verify dev tools (Node, npm, Docker, VS Code), global npm packages (nodemon, express-generator, create-react-app, @vue/cli, typescript) and Python packages (django, flask, requests, numpy, pandas, matplotlib) |
+| `python setup.py config backup [--backup-dir <path>]` | Backup `~/.bashrc`, `~/.bash_aliases`, `~/.gitconfig`, `~/.nanorc` and `~/Projects/personal` |
+| `python setup.py config restore [--snapshot <path>]` | Restore configs and personal projects from the latest (or given) backup |
+| `python setup.py repos [owner] [--limit N] [--visibility public\|private\|internal]` | List your GitHub repositories via the `gh` CLI |
+| `python setup.py menu` | Interactive menu: view/edit configs, add aliases, create projects, backup/restore, list repos |
+| `python setup.py summary` | Write `~/SETUP_SUMMARY.md`, a markdown summary of all logged setup/restore actions |
+| `python setup.py restore` | Full restore flow (install + extensions + next steps); add `--full` to also run dev-setup, restore configs and write the summary |
 | `python setup.py cleanup-old [--execute] [--backup-dir <path>]` | Scan for old legacy folders and move them to backup (dry run by default) |
 
 ## Restore after PC format

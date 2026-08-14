@@ -68,11 +68,14 @@ Copilot Pro+ features will activate from your GitHub account.
 5. Run:
 
 ```bash
-python setup.py restore
+python setup.py restore --full
 ```
+
+`--full` also reinstalls dev tools/packages, restores your backed-up configs and writes `~/SETUP_SUMMARY.md`.
 
 6. Open `ultimate.code-workspace`
 7. Sign in to GitHub in VS Code (Settings Sync + Copilot)
+8. Optionally run `python setup.py github-setup --name "Your Name" --email you@example.com --ssh`
 
 ## 4) Command guide
 
@@ -82,10 +85,31 @@ python setup.py restore
   Create `~/code/{work,personal,learning,experiments,archive}`, configure git defaults/aliases/global ignore, install extensions.
 
 - `python setup.py restore`  
-  Run full restore flow and print next steps.
+  Run full restore flow and print next steps. Add `--full` to also run `dev-setup`, restore configs and write the summary.
 
 - `python setup.py extensions`  
   Install or verify recommended extensions.
+
+- `python setup.py github-setup [--name NAME] [--email EMAIL] [--ssh]`  
+  Premium GitHub setup: check/verify `gh` CLI and auth status, configure git identity, create an ed25519 SSH key (with `--ssh`), and show the Copilot Pro+ activation checklist.
+
+- `python setup.py dev-setup [--skip-npm] [--skip-python]`  
+  Verify core dev tools (git, Node.js, npm, Docker, VS Code) and install global npm packages (nodemon, express-generator, create-react-app, @vue/cli, typescript) plus Python packages (django, flask, requests, numpy, pandas, matplotlib).
+
+- `python setup.py config backup [--backup-dir PATH]`  
+  Backup `~/.bashrc`, `~/.bash_aliases`, `~/.gitconfig`, `~/.nanorc` and `~/Projects/personal` into a timestamped snapshot (default: `~/my-vscode-setup-backup/configs`).
+
+- `python setup.py config restore [--backup-dir PATH] [--snapshot PATH]`  
+  Restore configs and personal projects from the latest (or a given) snapshot.
+
+- `python setup.py repos [owner] [--limit N] [--visibility public|private|internal]`  
+  List your GitHub repositories using the `gh` CLI (requires `gh auth login`).
+
+- `python setup.py menu`  
+  Interactive menu: view/edit config files, add shell aliases, create personal projects, backup/restore configs, list repos, write summary.
+
+- `python setup.py summary`  
+  Write `~/SETUP_SUMMARY.md`, a markdown summary of all logged setup and restore actions (log: `~/.my-vscode-setup.log`).
 
 - `python setup.py cleanup-old`  
   Scan old legacy folders (dry run).

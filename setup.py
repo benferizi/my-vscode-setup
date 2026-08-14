@@ -31,6 +31,36 @@ EXTENSIONS = [
     "ms-python.python",
 ]
 
+NPM_GLOBAL_PACKAGES = [
+    "nodemon",
+    "express-generator",
+    "create-react-app",
+    "@vue/cli",
+    "typescript",
+]
+
+PYTHON_PACKAGES = [
+    "django",
+    "flask",
+    "requests",
+    "numpy",
+    "pandas",
+    "matplotlib",
+]
+
+CONFIG_FILES = (
+    ".bashrc",
+    ".bash_aliases",
+    ".gitconfig",
+    ".nanorc",
+)
+
+PROJECTS_PERSONAL = Path.home() / "Projects" / "personal"
+BACKUP_ROOT = Path.home() / "my-vscode-setup-backup"
+CONFIG_BACKUP_DIR = BACKUP_ROOT / "configs"
+LOG_FILE = Path.home() / ".my-vscode-setup.log"
+SUMMARY_FILE = Path.home() / "SETUP_SUMMARY.md"
+
 BLOCKED_FILES_PATTERN = r"(^|/)\.env($|\.)|(^|/)id_rsa$|(^|/)id_ed25519$|\.pem$|\.key$"
 SECRET_PATTERN = (
     r"AKIA[0-9A-Z]{16}|"
@@ -120,6 +150,19 @@ def print_warn(message):
 
 def print_error(message):
     print(COLOR.wrap(message, "red", bold=True), file=sys.stderr)
+
+
+def log_action(action, status, detail=""):
+    """Append one action line to the setup log used by the summary command."""
+    timestamp = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+    line = f"{timestamp} | {status.upper():7} | {action}"
+    if detail:
+        line += f" | {detail}"
+    try:
+        with LOG_FILE.open("a", encoding="utf-8") as handle:
+            handle.write(line + "\n")
+    except OSError:
+        pass
 
 
 def ensure_workspace():
@@ -712,6 +755,342 @@ def extensions(_args):
                 print(res.stderr.strip())
 
 
+def github_setup(args):
+    """Premium GitHub setup: gh CLI, auth, SSH key, git identity, Copilot Pro+."""
+    print_info("== GitHub premium setup ==")
+
+    if not check_tool("git"):
+        raise RuntimeError("git is not installed or not in PATH.")
+
+    if check_tool("gh"):
+        print_ok("GitHub CLI (gh) is installed.")
+        log_action("github-setup: gh CLI", "ok")
+        auth = run(["gh", "auth", "status"], check=False)
+        if auth.returncode == 0:
+            print_ok("GitHub CLI is authenticated.")
+            log_action("github-setup: gh auth", "ok")
+        else:
+            print_warn("GitHub CLI is not authenticated. Run: gh auth login")
+            log_action("github-setup: gh auth", "pending", "run 'gh auth login'")
+    else:
+        print_warn("GitHub CLI (gh) is not installed. See: https://cli.github.com")
+        log_action("github-setup: gh CLI", "missing", "install from https://cli.github.com")
+
+    if args.name:
+        run_git_config("user.name", args.name)
+        log_action("github-setup: git user.name", "ok", args.name)
+    if args.email:
+        run_git_config("user.email", args.email)
+        log_action("github-setup: git user.email", "ok", args.email)
+    if not args.name and not args.email:
+        current_name = run(["git", "config", "--global", "user.name"], check=False).stdout.strip()
+        current_email = run(["git", "config", "--global", "user.email"], check=False).stdout.strip()
+        if current_name and current_email:
+            print_ok(f"Git identity already set: {current_name} <{current_email}>")
+        else:
+            print_warn("Git identity not fully set. Re-run with --name and --email.")
+
+    ssh_dir = Path.home() / ".ssh"
+    key_path = ssh_dir / "id_ed25519"
+    if key_path.exists():
+        print_ok(f"SSH key already exists: {key_path}")
+        log_action("github-setup: SSH key", "ok", str(key_path))
+    elif args.ssh:
+        if not check_tool("ssh-keygen"):
+            print_warn("ssh-keygen not found. Skipping SSH key creation.")
+            log_action("github-setup: SSH key", "skipped", "ssh-keygen missing")
+        else:
+            ssh_dir.mkdir(mode=0o700, parents=True, exist_ok=True)
+            comment = args.email or "my-vscode-setup"
+            res = run(["ssh-keygen", "-t", "ed25519", "-C", comment, "-f", str(key_path), "-N", ""], check=False)
+            if res.returncode == 0:
+                print_ok(f"SSH key created: {key_path}")
+                print_info("Add the public key to GitHub: https://github.com/settings/keys")
+                log_action("github-setup: SSH key", "ok", "created")
+            else:
+                print_warn("SSH key creation failed.")
+                log_action("github-setup: SSH key", "failed")
+    else:
+        print_warn("No SSH key found. Re-run with --ssh to create one.")
+        log_action("github-setup: SSH key", "pending", "re-run with --ssh")
+
+    print_info("Copilot Pro+ checklist:")
+    print("  1. Verify your plan: https://github.com/settings/copilot")
+    print("  2. Sign in to GitHub inside VS Code (Accounts menu).")
+    print("  3. The copilot + copilot-chat extensions are installed via 'python setup.py extensions'.")
+    log_action("github-setup: Copilot Pro+", "info", "manual verification at github.com/settings/copilot")
+    print_ok("GitHub setup finished.")
+
+
+def dev_setup(args):
+    """Install/verify developer environment: core tools, npm globals, Python packages."""
+    print_info("== Development environment setup ==")
+
+    for tool, hint in (
+        ("git", "https://git-scm.com"),
+        ("node", "https://nodejs.org"),
+        ("npm", "comes with Node.js"),
+        ("docker", "https://docs.docker.com/get-docker/"),
+        ("code", "https://code.visualstudio.com"),
+    ):
+        if check_tool(tool):
+            print_ok(f"Found: {tool}")
+            log_action(f"dev-setup: {tool}", "ok")
+        else:
+            print_warn(f"Missing: {tool} ({hint})")
+            log_action(f"dev-setup: {tool}", "missing", hint)
+
+    if check_tool("npm") and not args.skip_npm:
+        print_info("Installing global npm packages...")
+        for pkg in NPM_GLOBAL_PACKAGES:
+            res = run(["npm", "install", "-g", pkg], check=False)
+            if res.returncode == 0:
+                print_ok(f"npm: {pkg}")
+                log_action(f"dev-setup: npm {pkg}", "ok")
+            else:
+                print_warn(f"npm failed: {pkg}")
+                log_action(f"dev-setup: npm {pkg}", "failed")
+    elif args.skip_npm:
+        print_warn("Skipping npm packages (--skip-npm).")
+
+    if not args.skip_python:
+        print_info("Installing Python packages...")
+        for pkg in PYTHON_PACKAGES:
+            res = run([sys.executable, "-m", "pip", "install", "--user", pkg], check=False)
+            if res.returncode == 0:
+                print_ok(f"pip: {pkg}")
+                log_action(f"dev-setup: pip {pkg}", "ok")
+            else:
+                print_warn(f"pip failed: {pkg}")
+                log_action(f"dev-setup: pip {pkg}", "failed")
+    else:
+        print_warn("Skipping Python packages (--skip-python).")
+
+    print_ok("Development environment setup finished.")
+
+
+def config_backup(args):
+    """Back up key config files and ~/Projects/personal into the backup directory."""
+    backup_dir = Path(args.backup_dir).expanduser().resolve()
+    timestamp = datetime.now().strftime("%Y%m%d%H%M%S")
+    target = backup_dir / timestamp
+    target.mkdir(parents=True, exist_ok=True)
+
+    copied = 0
+    for name in CONFIG_FILES:
+        source = Path.home() / name
+        if source.exists():
+            shutil.copy2(source, target / name)
+            print_ok(f"Backed up: {source}")
+            log_action(f"config backup: {name}", "ok")
+            copied += 1
+        else:
+            print_warn(f"Not found, skipped: {source}")
+            log_action(f"config backup: {name}", "skipped", "not found")
+
+    if PROJECTS_PERSONAL.exists():
+        dest = target / "Projects-personal"
+        shutil.copytree(PROJECTS_PERSONAL, dest, ignore=shutil.ignore_patterns(*IGNORE_DIRS))
+        print_ok(f"Backed up projects: {PROJECTS_PERSONAL}")
+        log_action("config backup: Projects/personal", "ok")
+        copied += 1
+    else:
+        print_warn(f"Not found, skipped: {PROJECTS_PERSONAL}")
+
+    if copied == 0:
+        print_warn("Nothing was backed up.")
+    else:
+        print_ok(f"Backup complete: {target}")
+
+
+def latest_config_backup(backup_dir):
+    if not backup_dir.exists():
+        return None
+    candidates = sorted((p for p in backup_dir.iterdir() if p.is_dir()), key=lambda p: p.name)
+    return candidates[-1] if candidates else None
+
+
+def config_restore(args):
+    """Restore config files and personal projects from the latest (or given) backup."""
+    backup_dir = Path(args.backup_dir).expanduser().resolve()
+    source = Path(args.snapshot).expanduser().resolve() if args.snapshot else latest_config_backup(backup_dir)
+    if source is None or not source.exists():
+        print_warn(f"No backup snapshot found under: {backup_dir}")
+        return
+
+    print_info(f"Restoring from: {source}")
+    for name in CONFIG_FILES:
+        stored = source / name
+        if stored.exists():
+            shutil.copy2(stored, Path.home() / name)
+            print_ok(f"Restored: ~/{name}")
+            log_action(f"config restore: {name}", "ok")
+
+    stored_projects = source / "Projects-personal"
+    if stored_projects.exists():
+        PROJECTS_PERSONAL.parent.mkdir(parents=True, exist_ok=True)
+        shutil.copytree(stored_projects, PROJECTS_PERSONAL, dirs_exist_ok=True)
+        print_ok(f"Restored projects into: {PROJECTS_PERSONAL}")
+        log_action("config restore: Projects/personal", "ok")
+
+    print_ok("Config restore complete.")
+
+
+def list_github_repos(args):
+    """List your GitHub repositories using the GitHub CLI."""
+    if not check_tool("gh"):
+        raise RuntimeError("GitHub CLI (gh) is required. Install it from https://cli.github.com and run 'gh auth login'.")
+
+    cmd = ["gh", "repo", "list", "--limit", str(args.limit)]
+    if args.owner:
+        cmd.insert(2, args.owner)
+    if args.visibility:
+        cmd.extend(["--visibility", args.visibility])
+    res = run(cmd, check=False)
+    if res.returncode != 0:
+        if res.stderr.strip():
+            print(res.stderr.strip(), file=sys.stderr)
+        raise RuntimeError("Could not list repositories. Are you logged in? Try: gh auth login")
+    output = res.stdout.strip()
+    if output:
+        print(output)
+        log_action("repos: list", "ok")
+    else:
+        print_warn("No repositories found.")
+
+
+def summary(_args):
+    """Generate a markdown summary of everything set up / restored so far."""
+    lines = [
+        "# Setup & Restore Summary",
+        "",
+        f"Generated: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}",
+        "",
+        "## Actions",
+        "",
+    ]
+    if LOG_FILE.exists():
+        entries = LOG_FILE.read_text(encoding="utf-8").splitlines()
+        if entries:
+            lines.append("| Time | Status | Action | Detail |")
+            lines.append("|---|---|---|---|")
+            for entry in entries:
+                parts = [p.strip() for p in entry.split("|")]
+                while len(parts) < 4:
+                    parts.append("")
+                lines.append(f"| {parts[0]} | {parts[1]} | {parts[2]} | {parts[3]} |")
+        else:
+            lines.append("_No logged actions yet._")
+    else:
+        lines.append("_No logged actions yet. Run install / restore / github-setup / dev-setup first._")
+
+    lines += [
+        "",
+        "## Next steps",
+        "",
+        "1. Open `ultimate.code-workspace` in VS Code.",
+        "2. Sign in to GitHub in VS Code.",
+        "3. Verify Copilot Pro+ at https://github.com/settings/copilot",
+        "",
+    ]
+    SUMMARY_FILE.write_text("\n".join(lines), encoding="utf-8")
+    print_ok(f"Summary written to: {SUMMARY_FILE}")
+
+
+def _menu_edit_config():
+    print("Config files:")
+    for index, name in enumerate(CONFIG_FILES, start=1):
+        print(f"  {index}. ~/{name}")
+    choice = input("Pick a file number (or Enter to cancel): ").strip()
+    if not choice.isdigit() or not 1 <= int(choice) <= len(CONFIG_FILES):
+        return
+    path = Path.home() / CONFIG_FILES[int(choice) - 1]
+    editor = os.environ.get("EDITOR", "nano")
+    if check_tool(editor):
+        subprocess.run([editor, str(path)], check=False)
+    else:
+        print_warn(f"Editor '{editor}' not found. File path: {path}")
+
+
+def _menu_view_config():
+    print("Config files:")
+    for index, name in enumerate(CONFIG_FILES, start=1):
+        print(f"  {index}. ~/{name}")
+    choice = input("Pick a file number (or Enter to cancel): ").strip()
+    if not choice.isdigit() or not 1 <= int(choice) <= len(CONFIG_FILES):
+        return
+    path = Path.home() / CONFIG_FILES[int(choice) - 1]
+    if path.exists():
+        print(path.read_text(encoding="utf-8", errors="replace"))
+    else:
+        print_warn(f"File does not exist: {path}")
+
+
+def _menu_add_alias():
+    name = input("Alias name (e.g. gs): ").strip()
+    command = input("Alias command (e.g. git status): ").strip()
+    if not name or not command:
+        print_warn("Alias name and command are both required.")
+        return
+    if not re.fullmatch(r"[A-Za-z0-9_-]+", name):
+        print_warn("Alias name may only contain letters, numbers, '-' and '_'.")
+        return
+    aliases_file = Path.home() / ".bash_aliases"
+    escaped = command.replace("'", "'\\''")
+    with aliases_file.open("a", encoding="utf-8") as handle:
+        handle.write(f"alias {name}='{escaped}'\n")
+    print_ok(f"Added alias '{name}' to ~/.bash_aliases (reload your shell to use it).")
+    log_action(f"menu: alias {name}", "ok")
+
+
+def _menu_create_project():
+    name = input("New project name: ").strip()
+    if not name or not re.fullmatch(r"[A-Za-z0-9._-]+", name):
+        print_warn("Project name may only contain letters, numbers, '.', '-' and '_'.")
+        return
+    target = PROJECTS_PERSONAL / name
+    if target.exists():
+        print_warn(f"Already exists: {target}")
+        return
+    target.mkdir(parents=True)
+    if check_tool("git"):
+        run(["git", "init"], check=False, cwd=str(target))
+    (target / "README.md").write_text(f"# {name}\n", encoding="utf-8")
+    print_ok(f"Created project: {target}")
+    log_action(f"menu: project {name}", "ok")
+
+
+def menu(args):
+    """Interactive shell menu for config management and project actions."""
+    actions = {
+        "1": ("View a config file", _menu_view_config),
+        "2": ("Edit a config file", _menu_edit_config),
+        "3": ("Add a shell alias", _menu_add_alias),
+        "4": ("Create a personal project", _menu_create_project),
+        "5": ("Backup configs", lambda: config_backup(argparse.Namespace(backup_dir=str(CONFIG_BACKUP_DIR)))),
+        "6": ("Restore configs", lambda: config_restore(argparse.Namespace(backup_dir=str(CONFIG_BACKUP_DIR), snapshot=None))),
+        "7": ("List my GitHub repos", lambda: list_github_repos(argparse.Namespace(limit=30, owner=None, visibility=None))),
+        "8": ("Write setup summary", lambda: summary(args)),
+    }
+    while True:
+        print()
+        print_info("== my-vscode-setup menu ==")
+        for key, (label, _func) in actions.items():
+            print(f"  {key}. {label}")
+        print("  q. Quit")
+        choice = input("Choose an option: ").strip().lower()
+        if choice in ("q", "quit", "exit", ""):
+            return
+        entry = actions.get(choice)
+        if entry is None:
+            print_warn("Unknown option.")
+            continue
+        try:
+            entry[1]()
+        except RuntimeError as exc:
+            print_error(str(exc))
+
+
 def install(_args):
     ensure_workspace()
     install_git_aliases_and_defaults()
@@ -720,14 +1099,20 @@ def install(_args):
     print_ok("Install complete.")
 
 
-def restore(_args):
-    install(_args)
+def restore(args):
+    install(args)
     print()
+    if getattr(args, "full", False):
+        dev_setup(argparse.Namespace(skip_npm=False, skip_python=False))
+        config_restore(argparse.Namespace(backup_dir=str(CONFIG_BACKUP_DIR), snapshot=None))
+        summary(args)
     print_ok("Restore complete.")
     print("Next steps:")
     print("1. Open 'ultimate.code-workspace' in VS Code.")
     print("2. Sign in to GitHub in VS Code.")
     print("3. Enable Settings Sync and verify Copilot Pro+ is active.")
+    if not getattr(args, "full", False):
+        print("4. Run 'python setup.py restore --full' to also reinstall dev tools and restore configs.")
 
 
 def find_legacy_paths():
@@ -811,7 +1196,39 @@ def build_parser():
     sub.add_parser("hook", help="Install safety pre-commit hook").set_defaults(func=hook)
     sub.add_parser("secret-scan", help="Basic secret scan in current repo").set_defaults(func=secret_scan)
     sub.add_parser("extensions", help="Install/verify VS Code extensions").set_defaults(func=extensions)
-    sub.add_parser("restore", help="Full restore after PC format").set_defaults(func=restore)
+    restore_p = sub.add_parser("restore", help="Full restore after PC format")
+    restore_p.add_argument("--full", action="store_true", help="Also run dev-setup, restore configs and write summary")
+    restore_p.set_defaults(func=restore)
+
+    gh_p = sub.add_parser("github-setup", help="Premium GitHub setup: gh CLI, auth, SSH key, Copilot Pro+")
+    gh_p.add_argument("--name", help="Git user.name to configure globally")
+    gh_p.add_argument("--email", help="Git user.email to configure globally")
+    gh_p.add_argument("--ssh", action="store_true", help="Create an ed25519 SSH key if missing")
+    gh_p.set_defaults(func=github_setup)
+
+    dev_p = sub.add_parser("dev-setup", help="Install/verify dev tools, npm globals and Python packages")
+    dev_p.add_argument("--skip-npm", action="store_true", help="Skip global npm packages")
+    dev_p.add_argument("--skip-python", action="store_true", help="Skip Python packages")
+    dev_p.set_defaults(func=dev_setup)
+
+    config_p = sub.add_parser("config", help="Backup/restore key config files and personal projects")
+    config_sub = config_p.add_subparsers(dest="config_command", required=True)
+    backup_p = config_sub.add_parser("backup", help="Backup ~/.bashrc, ~/.bash_aliases, ~/.gitconfig, ~/.nanorc, ~/Projects/personal")
+    backup_p.add_argument("--backup-dir", default=str(CONFIG_BACKUP_DIR), help="Backup directory")
+    backup_p.set_defaults(func=config_backup)
+    restore_cfg_p = config_sub.add_parser("restore", help="Restore configs from the latest (or given) backup snapshot")
+    restore_cfg_p.add_argument("--backup-dir", default=str(CONFIG_BACKUP_DIR), help="Backup directory")
+    restore_cfg_p.add_argument("--snapshot", help="Specific snapshot folder to restore from")
+    restore_cfg_p.set_defaults(func=config_restore)
+
+    repos_p = sub.add_parser("repos", help="List your GitHub repositories (requires gh CLI)")
+    repos_p.add_argument("owner", nargs="?", help="Owner to list repos for (default: yourself)")
+    repos_p.add_argument("--limit", type=int, default=50, help="Maximum repositories to list")
+    repos_p.add_argument("--visibility", choices=("public", "private", "internal"), help="Filter by visibility")
+    repos_p.set_defaults(func=list_github_repos)
+
+    sub.add_parser("menu", help="Interactive menu: configs, aliases, projects, backups, repos").set_defaults(func=menu)
+    sub.add_parser("summary", help="Write markdown summary of setup/restore actions").set_defaults(func=summary)
     cleanup_p = sub.add_parser("cleanup-old", help="Scan and move old legacy bundles to backup")
     cleanup_p.add_argument(
         "--backup-dir",
