@@ -1,0 +1,22 @@
+{
+  "name": "my-vscode-setup (browser Copilot ready)",
+  "image": "mcr.microsoft.com/devcontainers/universal:2",
+  "customizations": {
+    "vscode": {
+      "extensions": [
+        "github.vscode-github-actions",
+        "eamodio.gitlens",
+        "github.vscode-pull-request-github",
+        "editorconfig.editorconfig",
+        "ms-azuretools.vscode-docker",
+        "redhat.vscode-yaml",
+        "davidanson.vscode-markdownlint",
+        "esbenp.prettier-vscode",
+        "streetsidesoftware.code-spell-checker",
+        "github.copilot",
+        "github.copilot-chat",
+        "ms-python.python"
+      ]
+    }
+  }
+}
