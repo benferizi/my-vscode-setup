@@ -11,6 +11,20 @@ Both legacy folders are intentionally kept as reference.
 
 ## Quick start
 
+Optional cleanup first (dry run):
+
+```bash
+python setup.py cleanup-old
+```
+
+Then move old bundles to backup:
+
+```bash
+python setup.py cleanup-old --execute
+```
+
+Then run setup:
+
 ```bash
 python setup.py install
 ```
@@ -53,16 +67,31 @@ The toolkit uses:
 | `python setup.py secret-scan` | Basic secret scan for current repo |
 | `python setup.py extensions` | Install/verify recommended VS Code extensions |
 | `python setup.py restore` | Full restore flow (install + extensions + next steps) |
+| `python setup.py cleanup-old [--execute] [--backup-dir <path>]` | Scan for old legacy folders and move them to backup (dry run by default) |
 
 ## Restore after PC format
 
 1. Install **VS Code**, **Python 3.8+**, and **Git**
 2. Clone this repository
-3. Run:
-   ```bash
-   python setup.py restore
-   ```
-4. Open `ultimate.code-workspace`
-5. Sign in to GitHub in VS Code
+3. Run cleanup dry run:
+  ```bash
+  python setup.py cleanup-old
+  ```
+4. Move old folders to backup:
+  ```bash
+  python setup.py cleanup-old --execute
+  ```
+5. Run:
+  ```bash
+  python setup.py restore
+  ```
+6. Open `ultimate.code-workspace`
+7. Sign in to GitHub in VS Code
 
 After sign-in, enable/confirm Settings Sync and Copilot Pro+.
+
+## Full user manual
+
+Read the full step-by-step manual here:
+
+- `MANUAL.md`

@@ -1,5 +1,6 @@
 #!/usr/bin/env python3
 import argparse
+from datetime import datetime
 import json
 import re
 import shutil
@@ -12,6 +13,8 @@ VERSION = "1.0.0"
 CATEGORIES = ("work", "personal", "learning", "experiments", "archive")
 WORKSPACE = Path.home() / "code"
 GLOBAL_GITIGNORE = Path.home() / ".gitignore_global"
+SCRIPT_ROOT = Path(__file__).resolve().parent
+LEGACY_DIR_NAMES = ("GitHub_Master_Toolkit_Bundle", "Personal_GitHub_Code_Command_Center")
 
 EXTENSIONS = [
     "github.vscode-github-actions",
@@ -727,6 +730,53 @@ def restore(_args):
     print("3. Enable Settings Sync and verify Copilot Pro+ is active.")
 
 
+def find_legacy_paths():
+    roots = {
+        SCRIPT_ROOT,
+        Path.cwd().resolve(),
+        Path.home().resolve(),
+    }
+    found = set()
+    for root in roots:
+        for name in LEGACY_DIR_NAMES:
+            candidate = (root / name).resolve()
+            if candidate.exists() and candidate.is_dir():
+                found.add(candidate)
+    return sorted(found, key=lambda p: str(p))
+
+
+def cleanup_old(args):
+    found = find_legacy_paths()
+    if not found:
+        print_ok("No legacy folders found in the standard scan locations.")
+        return
+
+    print_info("Legacy folders found:")
+    for path in found:
+        print(f"  - {path}")
+
+    backup_dir = Path(args.backup_dir).expanduser().resolve()
+    if not args.execute:
+        print()
+        print_warn("Dry run only. Nothing moved.")
+        print(f"Run with --execute to move these folders into: {backup_dir}")
+        return
+
+    backup_dir.mkdir(parents=True, exist_ok=True)
+    timestamp = datetime.now().strftime("%Y%m%d%H%M%S")
+
+    for path in found:
+        target = backup_dir / f"{path.name}-{timestamp}"
+        counter = 1
+        while target.exists():
+            target = backup_dir / f"{path.name}-{timestamp}-{counter}"
+            counter += 1
+        shutil.move(str(path), str(target))
+        print_ok(f"Moved: {path} -> {target}")
+
+    print_ok("Legacy cleanup complete.")
+
+
 def print_json_extensions(_args):
     print(json.dumps(EXTENSIONS, indent=2))
 
@@ -762,6 +812,18 @@ def build_parser():
     sub.add_parser("secret-scan", help="Basic secret scan in current repo").set_defaults(func=secret_scan)
     sub.add_parser("extensions", help="Install/verify VS Code extensions").set_defaults(func=extensions)
     sub.add_parser("restore", help="Full restore after PC format").set_defaults(func=restore)
+    cleanup_p = sub.add_parser("cleanup-old", help="Scan and move old legacy bundles to backup")
+    cleanup_p.add_argument(
+        "--backup-dir",
+        default="~/my-vscode-setup-backup",
+        help="Backup directory where legacy folders are moved",
+    )
+    cleanup_p.add_argument(
+        "--execute",
+        action="store_true",
+        help="Actually move the legacy folders (default is dry run)",
+    )
+    cleanup_p.set_defaults(func=cleanup_old)
     sub.add_parser("extensions-json", help=argparse.SUPPRESS).set_defaults(func=print_json_extensions)
 
     return parser
