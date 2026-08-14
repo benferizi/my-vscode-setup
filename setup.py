@@ -1341,6 +1341,21 @@ COPILOT_LAUNCHER_SCRIPT = """#!/usr/bin/env bash
 #   github-copilot --safe     full software rendering (slow but always draws)
 
 FLAGS=(--disable-gpu-compositing)
+APPIMAGE_FLAGS=()
+
+# Ubuntu 24.04+ restricts unprivileged user namespaces via AppArmor, which
+# breaks the Electron/Chromium sandbox (crash on launch with a 'SUID sandbox
+# helper' / zygote error). Detect the restriction and disable the sandbox.
+# Permanent fix instead: sudo sysctl kernel.apparmor_restrict_unprivileged_userns=0
+if [ "$(cat /proc/sys/kernel/apparmor_restrict_unprivileged_userns 2>/dev/null)" = "1" ]; then
+  FLAGS+=(--no-sandbox)
+fi
+
+# AppImages normally mount via FUSE 2. If libfuse2 is missing (common on
+# Ubuntu 24.04, where the package is libfuse2t64), extract-and-run instead.
+if ! command -v fusermount >/dev/null 2>&1 && ! ldconfig -p 2>/dev/null | grep -q libfuse.so.2; then
+  APPIMAGE_FLAGS+=(--appimage-extract-and-run)
+fi
 
 # On Wayland the Chromium Wayland backend often leaves panels unpainted;
 # running through XWayland fixes it.
@@ -1354,8 +1369,38 @@ if [ "$1" = "--safe" ]; then
   FLAGS+=(--disable-gpu --disable-software-rasterizer)
 fi
 
-exec "{appimage}" "${{FLAGS[@]}}" "$@"
+exec "{appimage}" "${{APPIMAGE_FLAGS[@]}}" "${{FLAGS[@]}}" "$@"
 """
+
+
+def _fuse_package_hint():
+    """Return the apt package providing libfuse2 for this distro (Ubuntu 24.04+ renamed it)."""
+    try:
+        os_release = Path("/etc/os-release").read_text(encoding="utf-8")
+    except OSError:
+        return "libfuse2"
+    info = {}
+    for line in os_release.splitlines():
+        if "=" in line:
+            key, _, value = line.partition("=")
+            info[key] = value.strip().strip('"')
+    if info.get("ID") == "ubuntu":
+        try:
+            major = int(info.get("VERSION_ID", "0").split(".")[0])
+        except ValueError:
+            major = 0
+        if major >= 24:
+            return "libfuse2t64"
+    return "libfuse2"
+
+
+def _apparmor_userns_restricted():
+    """True if the kernel blocks unprivileged user namespaces (Ubuntu 24.04+ default)."""
+    try:
+        flag = Path("/proc/sys/kernel/apparmor_restrict_unprivileged_userns").read_text().strip()
+    except OSError:
+        return False
+    return flag == "1"
 
 
 def _find_copilot_appimage(explicit):
@@ -1423,8 +1468,18 @@ def copilot_app(args):
 
     fuse_ok = any(check_tool(tool) for tool in ("fusermount", "fusermount3"))
     if not fuse_ok:
-        print_warn("FUSE not detected - AppImages need it. Install with: sudo apt install libfuse2")
-        log_action("copilot-app: fuse", "missing", "sudo apt install libfuse2")
+        fuse_pkg = _fuse_package_hint()
+        print_warn(
+            f"FUSE not detected - AppImages need it. Install with: sudo apt install {fuse_pkg}"
+        )
+        print_info("Until then the launcher automatically falls back to --appimage-extract-and-run.")
+        log_action("copilot-app: fuse", "missing", f"sudo apt install {fuse_pkg}")
+
+    if _apparmor_userns_restricted():
+        print_warn("AppArmor restricts unprivileged user namespaces (Ubuntu 24.04+ default).")
+        print_info("The launcher works around it with --no-sandbox. Permanent fix:")
+        print("       sudo sysctl kernel.apparmor_restrict_unprivileged_userns=0")
+        log_action("copilot-app: apparmor userns", "restricted", "launcher uses --no-sandbox")
 
     if check_tool("code"):
         installed = set(run(["code", "--list-extensions"], check=False).stdout.splitlines())
