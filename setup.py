@@ -1337,8 +1337,11 @@ COPILOT_LAUNCHER_SCRIPT = """#!/usr/bin/env bash
 # flags are ignored and the existing window is simply focused.
 #
 # Usage:
-#   github-copilot            normal launch (GPU compositing off, X11 on Wayland)
-#   github-copilot --safe     full software rendering (slow but always draws)
+#   github-copilot                normal launch (GPU compositing off, X11 on Wayland)
+#   github-copilot --fullscreen   start in full screen (F11 toggles it off)
+#   github-copilot --maximized    start with a maximized window
+#   github-copilot --safe         full software rendering (slow but always draws)
+# Options can be combined, e.g.: github-copilot --safe --fullscreen
 
 FLAGS=(--disable-gpu-compositing)
 APPIMAGE_FLAGS=()
@@ -1363,11 +1366,26 @@ if [ -n "$WAYLAND_DISPLAY" ] || [ "$XDG_SESSION_TYPE" = "wayland" ]; then
   FLAGS+=(--ozone-platform=x11)
 fi
 
-if [ "$1" = "--safe" ]; then
-  shift
-  export LIBGL_ALWAYS_SOFTWARE=1
-  FLAGS+=(--disable-gpu --disable-software-rasterizer)
-fi
+while [ $# -gt 0 ]; do
+  case "$1" in
+    --safe)
+      export LIBGL_ALWAYS_SOFTWARE=1
+      FLAGS+=(--disable-gpu --disable-software-rasterizer)
+      shift
+      ;;
+    --fullscreen)
+      FLAGS+=(--start-fullscreen)
+      shift
+      ;;
+    --maximized)
+      FLAGS+=(--start-maximized)
+      shift
+      ;;
+    *)
+      break
+      ;;
+  esac
+done
 
 exec "{appimage}" "${{APPIMAGE_FLAGS[@]}}" "${{FLAGS[@]}}" "$@"
 """
@@ -1497,6 +1515,7 @@ def copilot_app(args):
 
     print_info("Final steps:")
     print("  1. Launch it: github-copilot   (or from your app menu: 'GitHub Copilot')")
+    print("     Full screen: github-copilot --fullscreen   (F11 toggles; --maximized also available)")
     print("  2. Sign in with your GitHub account to activate Copilot Pro+.")
     print("  3. In VS Code, sign in via the Accounts menu for in-editor Copilot.")
     print("  Tip: rendering still broken (blank sidebar/missing text)?")
