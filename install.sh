@@ -10,10 +10,11 @@
 #
 #   bash install.sh
 #
-# What it does:
+# What it does (master full-automation script):
 #   1. Clones (or updates) the repo into ~/code/personal/my-vscode-setup
 #   2. Runs the full restore: workspace layout, git aliases, global gitignore,
 #      VS Code extensions, dev tools (npm globals + Python packages),
+#      AI stack (OpenAI SDK + Copilot checks + no-conflict advice),
 #      config restore (if a backup exists) and a setup summary.
 
 set -euo pipefail
@@ -68,12 +69,14 @@ if [ ! -f "setup.py" ]; then
     exit 1
 fi
 
-info "Running full restore (install + dev tools + config restore + summary)..."
+info "Running full restore (install + dev tools + AI stack + config restore + summary)..."
 python3 setup.py restore --full
 
 ok "All done!"
 echo
 echo "Next steps:"
 echo "  1. Open the workspace:  code $TARGET_DIR/ultimate.code-workspace"
-echo "  2. Sign in to GitHub in VS Code (Accounts menu)."
-echo "  3. Optional GitHub setup: python3 setup.py github-setup --name 'Your Name' --email 'you@example.com' --ssh"
+echo "  2. Sign in to GitHub in VS Code (Accounts menu) -> activates Copilot Pro+."
+echo "  3. Sign in at https://chatgpt.com -> all your ChatGPT Pro projects are already there (cloud-stored)."
+echo "  4. Put your OPENAI_API_KEY in a .env file (see ~/code/personal/.env.example). Never commit it."
+echo "  5. Optional GitHub setup: python3 setup.py github-setup --name 'Your Name' --email 'you@example.com' --ssh"

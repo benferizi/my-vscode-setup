@@ -869,6 +869,59 @@ def dev_setup(args):
     print_ok("Development environment setup finished.")
 
 
+AI_PYTHON_PACKAGES = ("openai", "python-dotenv")
+
+ENV_EXAMPLE_CONTENT = """# Copy this file to .env and fill in your real values.
+# NEVER commit .env - it is blocked by the global gitignore and pre-commit hook.
+OPENAI_API_KEY=your-openai-api-key-here
+"""
+
+
+def ai_setup(_args):
+    """One AI platform, no conflicts: OpenAI SDK + safe .env scaffold + Copilot checks."""
+    print_info("== AI stack setup (Copilot Pro+ + ChatGPT Pro / OpenAI SDK) ==")
+
+    print_info("Installing OpenAI SDK Python packages...")
+    for pkg in AI_PYTHON_PACKAGES:
+        res = run([sys.executable, "-m", "pip", "install", "--user", pkg], check=False)
+        if res.returncode == 0:
+            print_ok(f"pip: {pkg}")
+            log_action(f"ai-setup: pip {pkg}", "ok")
+        else:
+            print_warn(f"pip failed: {pkg}")
+            log_action(f"ai-setup: pip {pkg}", "failed")
+
+    env_example = WORKSPACE / "personal" / ".env.example"
+    env_example.parent.mkdir(parents=True, exist_ok=True)
+    if env_example.exists():
+        print_ok(f"Already exists: {env_example}")
+    else:
+        env_example.write_text(ENV_EXAMPLE_CONTENT, encoding="utf-8")
+        print_ok(f"Created safe template: {env_example}")
+        log_action("ai-setup: .env.example", "ok", str(env_example))
+
+    if check_tool("code"):
+        installed = set(run(["code", "--list-extensions"], check=False).stdout.splitlines())
+        for ext in ("github.copilot", "github.copilot-chat"):
+            if ext in installed:
+                print_ok(f"Copilot extension installed: {ext}")
+                log_action(f"ai-setup: {ext}", "ok")
+            else:
+                print_warn(f"Copilot extension missing: {ext} (run: python setup.py extensions)")
+                log_action(f"ai-setup: {ext}", "missing")
+    else:
+        print_warn("VS Code CLI 'code' not found. Copilot extensions not verified.")
+
+    print_info("How Copilot Pro+ and ChatGPT Pro work together with NO conflicts:")
+    print("  - Copilot Pro+ lives in VS Code/GitHub. Config = your GitHub sign-in + extensions. Nothing local to lose.")
+    print("  - ChatGPT Pro lives at chatgpt.com. All projects/chats are stored on OpenAI's servers; a PC format cannot delete them.")
+    print("  - The only shared local item is OPENAI_API_KEY for the SDK. Keep it in a .env file (never committed) and in a password manager.")
+    print("  - Division of labor: Copilot for in-editor completions/chat on your code; ChatGPT for research, planning and long-form work.")
+    print("  - Before formatting: commit+push all repos (python setup.py status), run 'python setup.py config backup', copy the backup off-disk.")
+    log_action("ai-setup: advice", "info", "Copilot Pro+ + ChatGPT Pro coexistence")
+    print_ok("AI stack setup finished.")
+
+
 def config_backup(args):
     """Back up key config files and ~/Projects/personal into the backup directory."""
     backup_dir = Path(args.backup_dir).expanduser().resolve()
@@ -1104,6 +1157,7 @@ def restore(args):
     print()
     if getattr(args, "full", False):
         dev_setup(argparse.Namespace(skip_npm=False, skip_python=False))
+        ai_setup(args)
         config_restore(argparse.Namespace(backup_dir=str(CONFIG_BACKUP_DIR), snapshot=None))
         summary(args)
     print_ok("Restore complete.")
@@ -1210,6 +1264,11 @@ def build_parser():
     dev_p.add_argument("--skip-npm", action="store_true", help="Skip global npm packages")
     dev_p.add_argument("--skip-python", action="store_true", help="Skip Python packages")
     dev_p.set_defaults(func=dev_setup)
+
+    sub.add_parser(
+        "ai-setup",
+        help="AI stack: OpenAI SDK, safe .env template, Copilot extension checks, no-conflict advice",
+    ).set_defaults(func=ai_setup)
 
     config_p = sub.add_parser("config", help="Backup/restore key config files and personal projects")
     config_sub = config_p.add_subparsers(dest="config_command", required=True)

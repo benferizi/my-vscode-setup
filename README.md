@@ -11,7 +11,7 @@ Both legacy folders are intentionally kept as reference.
 
 ## One-command full install (after PC format)
 
-Run this single command on a fresh machine — it clones the repo and runs the full automated setup (workspace layout, git config, VS Code extensions, dev tools, config restore, summary):
+`install.sh` is the **master full-automation script**. Run this single command on a fresh machine — it clones the repo and runs everything: workspace layout, git config, VS Code extensions, dev tools, AI stack (OpenAI SDK + Copilot checks), config restore, summary:
 
 ```bash
 curl -fsSL https://raw.githubusercontent.com/benferizi/my-vscode-setup/main/install.sh | bash
@@ -25,6 +25,29 @@ bash install.sh
 ```
 
 > **Note:** `install.sh` only exists on `main` after this change is merged. If a fresh clone doesn't contain it, merge the PR that added it (or pull the latest `main`) first.
+
+## AI stack: Copilot Pro+ + ChatGPT Pro — one platform, no conflicts
+
+Both subscriptions coexist and complement each other; nothing overlaps or conflicts:
+
+| | Copilot Pro+ | ChatGPT Pro |
+|---|---|---|
+| Lives in | VS Code / GitHub | chatgpt.com (browser) |
+| Local config | GitHub sign-in + extensions (installed by this toolkit) | None — everything is cloud-stored |
+| Survives PC format | Yes (just sign in again) | Yes (automatic) |
+| Best for | In-editor completions and chat on your code | Research, planning, long-form work |
+
+The only shared local item is `OPENAI_API_KEY` for the OpenAI SDK. Keep it in a `.env` file (blocked from commits by the global gitignore and pre-commit hook) and store a copy in a password manager.
+
+Run just the AI part any time:
+
+```bash
+python setup.py ai-setup
+```
+
+It installs the `openai` + `python-dotenv` packages, creates a safe `~/code/personal/.env.example` template, verifies the Copilot extensions and prints the no-conflict checklist.
+
+**Before formatting your PC:** commit + push all repos (`python setup.py status` shows what's pending), run `python setup.py config backup`, and copy `~/my-vscode-setup-backup` off-disk.
 
 ## Quick start
 
